@@ -1,15 +1,16 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import SimpleApp from './SimpleApp';
+import SimpleHomePage from './pages/SimpleHomePage';
 import SimpleTasksPage from './pages/SimpleTasksPage';
+import SimpleTomatoPage from './pages/SimpleTomatoPage';
 
 function App() {
   return (
     <Router>
       <div className="App">
         <Routes>
-          <Route path="/" element={<SimpleApp />} />
+          <Route path="/" element={<SimpleHomePage />} />
           <Route path="/tasks" element={<SimpleTasksPage />} />
+          <Route path="/tomato" element={<SimpleTomatoPage />} />
         </Routes>
       </div>
     </Router>

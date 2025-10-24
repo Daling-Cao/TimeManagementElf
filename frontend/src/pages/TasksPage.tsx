@@ -1,76 +1,40 @@
 import React, { useEffect, useState } from 'react';
 import { useTaskStore } from '../core/store';
-import { Task } from '../core/types';
+import { Task, CreateTaskRequest, SyncStatus } from '../core/types';
+import { syncService } from '../core/services/syncService';
 import TaskList from '../components/TaskList';
 
 const TasksPage: React.FC = () => {
-  const { tasks, addTask, updateTask, deleteTask, setTasks } = useTaskStore();
+  const { tasks, setTasks } = useTaskStore();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
 
-  // 模拟从 API 加载数据
+  // 加载任务数据
   useEffect(() => {
     const loadTasks = async () => {
       try {
-        // 这里将来会从 API 加载数据
-        // 现在使用模拟数据
-        const mockTasks: Task[] = [
-          {
-            task_id: '1',
-            user_id: 'user1',
-            title: '完成项目文档',
-            task_type: '工作',
-            priority: 'high',
-            tags: ['文档', '项目'],
-            estimate_minutes: 120,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            status: 'todo',
-            stats_focus_minutes: 0,
-            version: 1,
-            stats_actual_minutes: 0,
-            stats_sessions_count: 0,
-            summary: '需要完成项目的技术文档和用户手册',
-          },
-          {
-            task_id: '2',
-            user_id: 'user1',
-            title: '学习 React Hooks',
-            task_type: '学习',
-            priority: 'medium',
-            tags: ['React', '前端'],
-            estimate_minutes: 90,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            status: 'in_progress',
-            stats_focus_minutes: 30,
-            version: 1,
-            stats_actual_minutes: 30,
-            stats_sessions_count: 1,
-            summary: '深入学习 React Hooks 的使用方法',
-          },
-          {
-            task_id: '3',
-            user_id: 'user1',
-            title: '整理房间',
-            task_type: '生活',
-            priority: 'low',
-            tags: ['家务'],
-            estimate_minutes: 60,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            status: 'done',
-            completed_at: new Date().toISOString(),
-            stats_focus_minutes: 60,
-            version: 1,
-            stats_actual_minutes: 60,
-            stats_sessions_count: 1,
-            summary: '整理房间，清理不需要的物品',
-          },
-        ];
+        setLoading(true);
+        setError(null);
         
-        setTasks(mockTasks);
-      } catch (error) {
-        console.error('Failed to load tasks:', error);
+        // 从同步服务加载任务（优先从本地，然后从服务器同步）
+        const loadedTasks = await syncService.syncTasks();
+        setTasks(loadedTasks);
+        
+        // 获取同步状态
+        const status = await syncService.getSyncStatus();
+        setSyncStatus(status);
+      } catch (err) {
+        console.error('加载任务失败:', err);
+        setError('加载任务失败，请稍后重试');
+        
+        // 尝试从本地加载
+        try {
+          const localTasks = await syncService.getLocalTasks();
+          setTasks(localTasks);
+        } catch (localErr) {
+          console.error('从本地加载任务也失败:', localErr);
+        }
       } finally {
         setLoading(false);
       }
@@ -79,63 +43,202 @@ const TasksPage: React.FC = () => {
     loadTasks();
   }, [setTasks]);
 
-  const handleTaskCreate = (taskData: Omit<Task, 'task_id' | 'created_at' | 'updated_at' | 'version'>) => {
-    const newTask: Task = {
-      ...taskData,
-      task_id: Date.now().toString(),
-      user_id: 'user1',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      version: 1,
-      stats_focus_minutes: 0,
-      stats_actual_minutes: 0,
-      stats_sessions_count: 0,
-    };
-    addTask(newTask);
+  // 手动同步
+  const handleSync = async () => {
+    try {
+      setSyncStatus({ ...syncStatus!, isSyncing: true });
+      await syncService.forceSync();
+      const loadedTasks = await syncService.getLocalTasks();
+      setTasks(loadedTasks);
+      const status = await syncService.getSyncStatus();
+      setSyncStatus(status);
+    } catch (err) {
+      console.error('同步失败:', err);
+      setError('同步失败，请检查网络连接');
+    }
   };
 
-  const handleTaskUpdate = (taskId: string, updates: Partial<Task>) => {
-    updateTask(taskId, {
-      ...updates,
-      updated_at: new Date().toISOString(),
-    });
+  // 创建任务（适配 TaskList 组件的接口）
+  const handleTaskCreate = async (taskData: Omit<Task, 'task_id' | 'created_at' | 'updated_at' | 'version'>) => {
+    try {
+      // 转换为 API 请求格式
+      const request: CreateTaskRequest = {
+        title: taskData.title,
+        task_type: taskData.task_type,
+        priority: taskData.priority,
+        tags: taskData.tags,
+        estimate_minutes: taskData.estimate_minutes,
+      };
+      
+      const newTask = await syncService.createTask(request);
+      // 更新本地状态
+      const updatedTasks = await syncService.getLocalTasks();
+      setTasks(updatedTasks);
+      
+      // 更新同步状态
+      const status = await syncService.getSyncStatus();
+      setSyncStatus(status);
+    } catch (err) {
+      console.error('创建任务失败:', err);
+      setError('创建任务失败');
+    }
   };
 
-  const handleTaskDelete = (taskId: string) => {
-    if (window.confirm('确定要删除这个任务吗？')) {
-      deleteTask(taskId);
+  // 更新任务
+  const handleTaskUpdate = async (taskId: string, updates: Partial<Task>) => {
+    try {
+      const task = tasks.find(t => t.task_id === taskId);
+      if (!task) return;
+
+      await syncService.updateTask(taskId, {
+        ...updates,
+        version: task.version,
+      });
+      
+      // 更新本地状态
+      const updatedTasks = await syncService.getLocalTasks();
+      setTasks(updatedTasks);
+      
+      // 更新同步状态
+      const status = await syncService.getSyncStatus();
+      setSyncStatus(status);
+    } catch (err) {
+      console.error('更新任务失败:', err);
+      setError('更新任务失败');
+    }
+  };
+
+  // 删除任务
+  const handleTaskDelete = async (taskId: string) => {
+    if (!window.confirm('确定要删除这个任务吗？')) {
+      return;
+    }
+
+    try {
+      await syncService.deleteTask(taskId);
+      
+      // 更新本地状态
+      const updatedTasks = await syncService.getLocalTasks();
+      setTasks(updatedTasks);
+      
+      // 更新同步状态
+      const status = await syncService.getSyncStatus();
+      setSyncStatus(status);
+    } catch (err) {
+      console.error('删除任务失败:', err);
+      setError('删除任务失败');
     }
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-gray-600">加载中...</div>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '100vh',
+        backgroundColor: '#f9fafb'
+      }}>
+        <div style={{ color: '#6b7280', fontSize: '16px' }}>加载中...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb' }}>
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-primary-600">时间管理小精灵</h1>
+      <header style={{
+        backgroundColor: 'white',
+        boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        borderBottom: '1px solid #e5e7eb'
+      }}>
+        <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '0 16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '64px' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#0284c7' }}>
+                时间管理小精灵
+              </h1>
             </div>
-            <nav className="flex space-x-8">
-              <a href="/" className="text-gray-600 hover:text-primary-600">首页</a>
-              <a href="/tasks" className="text-primary-600 font-medium">任务列表</a>
-              <a href="/tomato" className="text-gray-600 hover:text-primary-600">番茄钟</a>
-              <a href="/settings" className="text-gray-600 hover:text-primary-600">设置</a>
+            <nav style={{ display: 'flex', gap: '32px' }}>
+              <a href="/" style={{ color: '#6b7280', textDecoration: 'none' }}>首页</a>
+              <a href="/tasks" style={{ color: '#0284c7', fontWeight: '500', textDecoration: 'none' }}>任务列表</a>
             </nav>
           </div>
         </div>
       </header>
 
+      {/* Sync Status Bar */}
+      {syncStatus && (
+        <div style={{
+          backgroundColor: syncStatus.isOnline ? '#ecfdf5' : '#fef2f2',
+          borderBottom: '1px solid ' + (syncStatus.isOnline ? '#d1fae5' : '#fecaca'),
+          padding: '8px 16px'
+        }}>
+          <div style={{ maxWidth: '80rem', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '14px' }}>
+              <span style={{ color: syncStatus.isOnline ? '#059669' : '#dc2626' }}>
+                {syncStatus.isOnline ? '● 在线' : '● 离线'}
+              </span>
+              {syncStatus.pendingChanges > 0 && (
+                <span style={{ color: '#f59e0b' }}>
+                  {syncStatus.pendingChanges} 个待同步更改
+                </span>
+              )}
+              {syncStatus.isSyncing && (
+                <span style={{ color: '#3b82f6' }}>同步中...</span>
+              )}
+            </div>
+            <button
+              onClick={handleSync}
+              disabled={!syncStatus.isOnline || syncStatus.isSyncing}
+              style={{
+                padding: '4px 12px',
+                backgroundColor: syncStatus.isOnline && !syncStatus.isSyncing ? '#0284c7' : '#d1d5db',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '14px',
+                cursor: syncStatus.isOnline && !syncStatus.isSyncing ? 'pointer' : 'not-allowed'
+              }}
+            >
+              手动同步
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div style={{
+          backgroundColor: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '6px',
+          padding: '12px 16px',
+          margin: '16px auto',
+          maxWidth: '80rem',
+          color: '#dc2626'
+        }}>
+          {error}
+          <button
+            onClick={() => setError(null)}
+            style={{
+              marginLeft: '12px',
+              padding: '2px 8px',
+              backgroundColor: 'transparent',
+              border: '1px solid #dc2626',
+              borderRadius: '4px',
+              color: '#dc2626',
+              fontSize: '12px',
+              cursor: 'pointer'
+            }}
+          >
+            关闭
+          </button>
+        </div>
+      )}
+
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main style={{ maxWidth: '80rem', margin: '0 auto', padding: '32px 16px' }}>
         <TaskList
           tasks={tasks}
           onTaskCreate={handleTaskCreate}

@@ -94,7 +94,7 @@ class ApiService {
 
   async updateTask(taskId: string, updates: UpdateTaskRequest): Promise<Task> {
     return this.request<Task>(`/tasks/${taskId}`, {
-      method: 'PUT',
+      method: 'PATCH',
       body: JSON.stringify(updates),
     });
   }
