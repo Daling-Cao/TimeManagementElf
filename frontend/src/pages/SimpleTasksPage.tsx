@@ -1,46 +1,58 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface Task {
   id: string;
   title: string;
-  status: 'todo' | 'in_progress' | 'done';
+  status: 'pending' | 'in_progress' | 'completed';
   priority: 'low' | 'medium' | 'high';
   type: string;
 }
 
 const SimpleTasksPage: React.FC = () => {
-  const [tasks, setTasks] = useState<Task[]>([
-    {
-      id: '1',
-      title: '完成项目文档',
-      status: 'todo',
-      priority: 'high',
-      type: '工作',
-    },
-    {
-      id: '2',
-      title: '学习 React Hooks',
-      status: 'in_progress',
-      priority: 'medium',
-      type: '学习',
-    },
-    {
-      id: '3',
-      title: '整理房间',
-      status: 'done',
-      priority: 'low',
-      type: '生活',
-    },
-  ]);
+  // 从 localStorage 加载任务
+  const [tasks, setTasks] = useState<Task[]>(() => {
+    const saved = localStorage.getItem('tasks');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+    return [
+      {
+        id: '1',
+        title: '完成项目文档',
+        status: 'pending',
+        priority: 'high',
+        type: '工作',
+      },
+      {
+        id: '2',
+        title: '学习 React Hooks',
+        status: 'in_progress',
+        priority: 'medium',
+        type: '学习',
+      },
+      {
+        id: '3',
+        title: '整理房间',
+        status: 'completed',
+        priority: 'low',
+        type: '生活',
+      },
+    ];
+  });
 
   const [newTask, setNewTask] = useState('');
+
+  // 保存任务到 localStorage
+  useEffect(() => {
+    localStorage.setItem('tasks', JSON.stringify(tasks));
+  }, [tasks]);
 
   const addTask = () => {
     if (newTask.trim()) {
       const task: Task = {
         id: Date.now().toString(),
         title: newTask,
-        status: 'todo',
+        status: 'pending',
         priority: 'medium',
         type: '其他',
       };
@@ -61,9 +73,9 @@ const SimpleTasksPage: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'done': return '#10b981';
+      case 'completed': return '#10b981';
       case 'in_progress': return '#3b82f6';
-      case 'todo': return '#6b7280';
+      case 'pending': return '#6b7280';
       default: return '#6b7280';
     }
   };
@@ -99,6 +111,8 @@ const SimpleTasksPage: React.FC = () => {
             <nav style={{ display: 'flex', gap: '32px' }}>
               <a href="/" style={{ color: '#4b5563', textDecoration: 'none' }}>首页</a>
               <a href="/tasks" style={{ color: '#0284c7', fontWeight: '500', textDecoration: 'none' }}>任务列表</a>
+              <a href="/tomato" style={{ color: '#6b7280', textDecoration: 'none' }}>番茄钟</a>
+              <a href="/statistics" style={{ color: '#6b7280', textDecoration: 'none' }}>统计</a>
             </nav>
           </div>
         </div>
@@ -173,13 +187,13 @@ const SimpleTasksPage: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <input
                       type="checkbox"
-                      checked={task.status === 'done'}
-                      onChange={(e) => updateTaskStatus(task.id, e.target.checked ? 'done' : 'todo')}
+                      checked={task.status === 'completed'}
+                      onChange={(e) => updateTaskStatus(task.id, e.target.checked ? 'completed' : 'pending')}
                       style={{ width: '16px', height: '16px' }}
                     />
                     <span style={{
-                      textDecoration: task.status === 'done' ? 'line-through' : 'none',
-                      color: task.status === 'done' ? '#6b7280' : '#111827',
+                      textDecoration: task.status === 'completed' ? 'line-through' : 'none',
+                      color: task.status === 'completed' ? '#6b7280' : '#111827',
                       fontSize: '14px'
                     }}>
                       {task.title}
@@ -192,7 +206,7 @@ const SimpleTasksPage: React.FC = () => {
                       backgroundColor: getStatusColor(task.status) + '20',
                       color: getStatusColor(task.status)
                     }}>
-                      {task.status === 'done' ? '已完成' : task.status === 'in_progress' ? '进行中' : '待办'}
+                      {task.status === 'completed' ? '已完成' : task.status === 'in_progress' ? '进行中' : '待办'}
                     </span>
                     <span style={{
                       padding: '2px 8px',
@@ -219,9 +233,9 @@ const SimpleTasksPage: React.FC = () => {
                         fontSize: '12px'
                       }}
                     >
-                      <option value="todo">待办</option>
+                      <option value="pending">待办</option>
                       <option value="in_progress">进行中</option>
-                      <option value="done">已完成</option>
+                      <option value="completed">已完成</option>
                     </select>
                     <button
                       onClick={() => deleteTask(task.id)}

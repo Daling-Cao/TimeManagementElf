@@ -34,7 +34,7 @@ const SimpleHomePage: React.FC = () => {
           这是一个时间管理应用，帮助您更好地管理任务和时间。
         </p>
 
-        <div style={{ display: 'flex', gap: '16px', marginTop: '24px' }}>
+        <div style={{ display: 'flex', gap: '16px', marginTop: '24px', flexWrap: 'wrap' }}>
           <a
             href="/tasks"
             style={{
@@ -64,6 +64,21 @@ const SimpleHomePage: React.FC = () => {
           >
             🍅 番茄钟
           </a>
+
+          <a
+            href="/statistics"
+            style={{
+              display: 'inline-block',
+              padding: '12px 24px',
+              backgroundColor: '#10b981',
+              color: 'white',
+              textDecoration: 'none',
+              borderRadius: '8px',
+              fontWeight: '500'
+            }}
+          >
+            📊 统计
+          </a>
         </div>
 
         <div style={{
@@ -79,9 +94,9 @@ const SimpleHomePage: React.FC = () => {
           <ul style={{ color: '#1e40af', margin: 0, paddingLeft: '20px' }}>
             <li>✅ 任务管理（创建、编辑、删除）</li>
             <li>✅ 番茄钟计时器</li>
-            <li>✅ 数据同步（在线/离线支持）</li>
-            <li>✅ IndexedDB 本地存储</li>
-            <li>⏳ 统计面板（开发中）</li>
+            <li>✅ 统计面板和数据可视化</li>
+            <li>✅ 本地存储（LocalStorage）</li>
+            <li>⏳ 后端同步（开发中）</li>
           </ul>
         </div>
       </main>

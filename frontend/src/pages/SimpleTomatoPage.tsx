@@ -5,6 +5,7 @@ const SimpleTomatoPage: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState(25);
+  const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -14,6 +15,8 @@ const SimpleTomatoPage: React.FC = () => {
         setTimeRemaining(prev => prev - 1);
       }, 1000);
     } else if (timeRemaining === 0 && isRunning) {
+      // 番茄钟完成，保存会话
+      saveTomatoSession(true);
       setIsRunning(false);
       alert('🎉 番茄钟完成！建议休息一下~');
     }
@@ -22,6 +25,24 @@ const SimpleTomatoPage: React.FC = () => {
       if (interval) clearInterval(interval);
     };
   }, [isRunning, isPaused, timeRemaining]);
+
+  const saveTomatoSession = (completed: boolean) => {
+    if (!sessionStartTime) return;
+
+    const session = {
+      id: Date.now().toString(),
+      startTime: sessionStartTime.toISOString(),
+      endTime: new Date().toISOString(),
+      duration: selectedDuration,
+      completed,
+      taskId: null
+    };
+
+    const sessionsJson = localStorage.getItem('tomatoSessions');
+    const sessions = sessionsJson ? JSON.parse(sessionsJson) : [];
+    sessions.push(session);
+    localStorage.setItem('tomatoSessions', JSON.stringify(sessions));
+  };
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -33,6 +54,7 @@ const SimpleTomatoPage: React.FC = () => {
     setTimeRemaining(selectedDuration * 60);
     setIsRunning(true);
     setIsPaused(false);
+    setSessionStartTime(new Date());
   };
 
   const handlePause = () => {
@@ -45,9 +67,14 @@ const SimpleTomatoPage: React.FC = () => {
 
   const handleStop = () => {
     if (window.confirm('确定要停止吗？')) {
+      // 保存中断的会话
+      if (sessionStartTime) {
+        saveTomatoSession(false);
+      }
       setIsRunning(false);
       setIsPaused(false);
       setTimeRemaining(selectedDuration * 60);
+      setSessionStartTime(null);
     }
   };
 
