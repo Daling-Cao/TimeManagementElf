@@ -1,47 +1,158 @@
 import React, { useState, useEffect } from 'react';
+import { useTomatoStore } from '../core/store/tomatoStore';
+
+interface Task {
+  id: string;
+  title: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  priority: 'low' | 'medium' | 'high';
+  type: string;
+  summaries?: any[];
+  totalDuration?: number;
+  completedSessions?: number;
+  startedAt?: string;
+  completedAt?: string;
+}
 
 const SimpleTomatoPage: React.FC = () => {
-  const [timeRemaining, setTimeRemaining] = useState(25 * 60); // 25分钟
-  const [isRunning, setIsRunning] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [selectedDuration, setSelectedDuration] = useState(25);
-  const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
+  // 使用全局状态
+  const {
+    timeRemaining,
+    isRunning,
+    isPaused,
+    selectedDuration,
+    sessionStartTime,
+    currentTask,
+    start,
+    pause,
+    resume,
+    stop,
+    setCurrentTask,
+    setSelectedDuration
+  } = useTomatoStore();
 
+  // 本地状态（仅用于总结对话框）
+  const [showSummaryDialog, setShowSummaryDialog] = useState(false);
+  const [summary, setSummary] = useState('');
+  const [sessionCompleted, setSessionCompleted] = useState(false);
+
+  // 从 URL 加载任务
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    const params = new URLSearchParams(window.location.search);
+    const taskId = params.get('taskId');
     
-    if (isRunning && !isPaused && timeRemaining > 0) {
-      interval = setInterval(() => {
-        setTimeRemaining(prev => prev - 1);
-      }, 1000);
-    } else if (timeRemaining === 0 && isRunning) {
-      // 番茄钟完成，保存会话
-      saveTomatoSession(true);
-      setIsRunning(false);
-      alert('🎉 番茄钟完成！建议休息一下~');
+    if (taskId) {
+      const tasksJson = localStorage.getItem('tasks');
+      if (tasksJson) {
+        const tasks: Task[] = JSON.parse(tasksJson);
+        const task = tasks.find(t => t.id === taskId);
+        if (task) {
+          setCurrentTask(task);
+        }
+      }
     }
+  }, []);
 
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRunning, isPaused, timeRemaining]);
+  // 请求通知权限
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
-  const saveTomatoSession = (completed: boolean) => {
+  // 监听番茄钟完成事件
+  useEffect(() => {
+    if (timeRemaining === 0 && !isRunning && sessionStartTime) {
+      // 番茄钟完成，显示总结对话框
+      setSessionCompleted(true);
+      setShowSummaryDialog(true);
+    }
+  }, [timeRemaining, isRunning, sessionStartTime]);
+
+  const saveTomatoSession = (completed: boolean, summaryText: string) => {
     if (!sessionStartTime) return;
 
+    const endTime = new Date();
+    const startTime = sessionStartTime;
+    
+    // 计算实际工作时长（分钟）
+    const actualDurationMs = endTime.getTime() - startTime.getTime();
+    const actualDurationMinutes = Math.round(actualDurationMs / 1000 / 60);
+
+    const sessionId = Date.now().toString();
     const session = {
-      id: Date.now().toString(),
-      startTime: sessionStartTime.toISOString(),
-      endTime: new Date().toISOString(),
-      duration: selectedDuration,
+      id: sessionId,
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+      duration: actualDurationMinutes, // 使用实际时长
+      plannedDuration: selectedDuration, // 保存计划时长
       completed,
-      taskId: null
+      taskId: currentTask?.id || null,
+      summary: summaryText
     };
 
+    // 保存到番茄钟会话记录
     const sessionsJson = localStorage.getItem('tomatoSessions');
     const sessions = sessionsJson ? JSON.parse(sessionsJson) : [];
     sessions.push(session);
     localStorage.setItem('tomatoSessions', JSON.stringify(sessions));
+
+    // 如果有关联任务，更新任务的总结记录
+    if (currentTask) {
+      const tasksJson = localStorage.getItem('tasks');
+      if (tasksJson) {
+        const tasks: Task[] = JSON.parse(tasksJson);
+        const taskIndex = tasks.findIndex(t => t.id === currentTask.id);
+        
+        if (taskIndex !== -1) {
+          const task = tasks[taskIndex];
+          const newSummary = {
+            id: Date.now().toString(),
+            sessionId: sessionId,
+            summary: summaryText,
+            timestamp: new Date().toISOString(),
+            duration: actualDurationMinutes, // 使用实际时长
+            completed: completed
+          };
+
+          tasks[taskIndex] = {
+            ...task,
+            summaries: [...(task.summaries || []), newSummary],
+            totalDuration: (task.totalDuration || 0) + actualDurationMinutes, // 累加实际时长
+            completedSessions: (task.completedSessions || 0) + (completed ? 1 : 0)
+          };
+
+          localStorage.setItem('tasks', JSON.stringify(tasks));
+          setCurrentTask(tasks[taskIndex]);
+        }
+      }
+    }
+  };
+
+  const handleSaveSummary = (taskCompleted: boolean) => {
+    saveTomatoSession(sessionCompleted, summary);
+    
+    // 如果任务完成，更新任务状态
+    if (taskCompleted && currentTask) {
+      const tasksJson = localStorage.getItem('tasks');
+      if (tasksJson) {
+        const tasks: Task[] = JSON.parse(tasksJson);
+        const taskIndex = tasks.findIndex(t => t.id === currentTask.id);
+        
+        if (taskIndex !== -1) {
+          tasks[taskIndex].status = 'completed';
+          tasks[taskIndex].completedAt = new Date().toISOString();
+          localStorage.setItem('tasks', JSON.stringify(tasks));
+        }
+      }
+      // 返回任务列表
+      window.location.href = '/tasks';
+    } else {
+      // 重置状态，准备下一个番茄钟
+      setShowSummaryDialog(false);
+      setSummary('');
+      setSessionCompleted(false);
+    }
   };
 
   const formatTime = (seconds: number): string => {
@@ -51,30 +162,22 @@ const SimpleTomatoPage: React.FC = () => {
   };
 
   const handleStart = () => {
-    setTimeRemaining(selectedDuration * 60);
-    setIsRunning(true);
-    setIsPaused(false);
-    setSessionStartTime(new Date());
+    start(selectedDuration, currentTask);
   };
 
   const handlePause = () => {
-    setIsPaused(true);
+    pause();
   };
 
   const handleResume = () => {
-    setIsPaused(false);
+    resume();
   };
 
   const handleStop = () => {
     if (window.confirm('确定要停止吗？')) {
-      // 保存中断的会话
-      if (sessionStartTime) {
-        saveTomatoSession(false);
-      }
-      setIsRunning(false);
-      setIsPaused(false);
-      setTimeRemaining(selectedDuration * 60);
-      setSessionStartTime(null);
+      stop();
+      setSessionCompleted(false);
+      setShowSummaryDialog(true);
     }
   };
 
@@ -102,8 +205,9 @@ const SimpleTomatoPage: React.FC = () => {
             </h1>
             <nav style={{ display: 'flex', gap: '32px' }}>
               <a href="/" style={{ color: '#6b7280', textDecoration: 'none' }}>首页</a>
-              <a href="/tasks" style={{ color: '#6b7280', textDecoration: 'none' }}>任务列表</a>
+              <a href="/tasks" target="_blank" rel="noopener noreferrer" style={{ color: '#6b7280', textDecoration: 'none' }}>任务列表</a>
               <a href="/tomato" style={{ color: '#0284c7', fontWeight: '500', textDecoration: 'none' }}>番茄钟</a>
+              <a href="/statistics" target="_blank" rel="noopener noreferrer" style={{ color: '#6b7280', textDecoration: 'none' }}>统计</a>
             </nav>
           </div>
         </div>
@@ -117,6 +221,24 @@ const SimpleTomatoPage: React.FC = () => {
           boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
           padding: '32px'
         }}>
+          {/* 当前任务显示 */}
+          {currentTask && (
+            <div style={{
+              marginBottom: '24px',
+              padding: '16px',
+              backgroundColor: '#eff6ff',
+              borderRadius: '8px',
+              border: '1px solid #bfdbfe'
+            }}>
+              <div style={{ fontSize: '12px', color: '#3b82f6', marginBottom: '4px' }}>
+                当前任务
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: '600', color: '#1e40af' }}>
+                {currentTask.title}
+              </div>
+            </div>
+          )}
+
           {/* Timer Display */}
           <div style={{ textAlign: 'center', marginBottom: '32px' }}>
             <h2 style={{
@@ -165,10 +287,7 @@ const SimpleTomatoPage: React.FC = () => {
                   {[15, 25, 30, 45, 60].map(duration => (
                     <button
                       key={duration}
-                      onClick={() => {
-                        setSelectedDuration(duration);
-                        setTimeRemaining(duration * 60);
-                      }}
+                      onClick={() => setSelectedDuration(duration)}
                       style={{
                         flex: '1',
                         minWidth: '60px',
@@ -280,6 +399,161 @@ const SimpleTomatoPage: React.FC = () => {
           </div>
         </div>
       </main>
+
+      {/* 总结对话框 */}
+      {showSummaryDialog && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              width: '90%',
+              maxWidth: '500px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              zIndex: 2001
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', marginBottom: '8px' }}>
+              {sessionCompleted ? '🎉 番茄钟完成！' : '⏸️ 番茄钟中断'}
+            </h3>
+
+            {/* 显示实际工作时长 */}
+            {sessionStartTime && (
+              <div style={{
+                fontSize: '14px',
+                color: '#6b7280',
+                marginBottom: '12px',
+                padding: '8px 12px',
+                backgroundColor: '#f3f4f6',
+                borderRadius: '6px'
+              }}>
+                实际工作时长: <strong style={{ color: '#111827' }}>
+                  {Math.round((new Date().getTime() - sessionStartTime.getTime()) / 1000 / 60)} 分钟
+                </strong>
+              </div>
+            )}
+
+            <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '20px' }}>
+              {sessionCompleted 
+                ? '恭喜完成一个番茄钟！请写下这段时间的工作总结。'
+                : '番茄钟已中断，请简单记录一下工作内容。'}
+            </p>
+
+            {/* 总结输入 */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                工作总结
+              </label>
+              <textarea
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                placeholder="请输入本次工作的总结..."
+                autoFocus
+                rows={4}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+
+            {/* 任务完成询问 */}
+            {currentTask && currentTask.status !== 'completed' && (
+              <div style={{
+                marginBottom: '20px',
+                padding: '16px',
+                backgroundColor: '#fef3c7',
+                borderRadius: '8px',
+                border: '1px solid #fcd34d'
+              }}>
+                <div style={{ fontSize: '14px', fontWeight: '500', color: '#92400e', marginBottom: '8px' }}>
+                  任务状态
+                </div>
+                <div style={{ fontSize: '14px', color: '#78350f' }}>
+                  任务「{currentTask.title}」是否已完成？
+                </div>
+              </div>
+            )}
+
+            {/* 按钮 */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              {currentTask && currentTask.status !== 'completed' ? (
+                <>
+                  <button
+                    onClick={() => handleSaveSummary(false)}
+                    style={{
+                      flex: 1,
+                      padding: '10px 20px',
+                      backgroundColor: '#f3f4f6',
+                      color: '#374151',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    任务未完成
+                  </button>
+                  <button
+                    onClick={() => handleSaveSummary(true)}
+                    style={{
+                      flex: 1,
+                      padding: '10px 20px',
+                      backgroundColor: '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    任务已完成
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => handleSaveSummary(false)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 20px',
+                    backgroundColor: '#0284c7',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer'
+                  }}
+                >
+                  保存总结
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
