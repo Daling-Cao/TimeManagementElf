@@ -25,7 +25,7 @@ interface Task {
 }
 
 const SimpleTasksPage: React.FC = () => {
-  const { isRunning } = useTomatoStore();
+  const { isRunning, isPaused } = useTomatoStore();
   
   // 从 localStorage 加载任务
   const [tasks, setTasks] = useState<Task[]>(() => {
@@ -78,6 +78,16 @@ const SimpleTasksPage: React.FC = () => {
   const [customTypeInput, setCustomTypeInput] = useState('');
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  // 编辑对话框状态
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editTask, setEditTask] = useState<Task | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editPriority, setEditPriority] = useState<Task['priority']>('medium');
+  const [editType, setEditType] = useState('工作');
+  const [editIsCustomType, setEditIsCustomType] = useState(false);
+  const [editCustomTypeInput, setEditCustomTypeInput] = useState('');
+  const [editError, setEditError] = useState('');
 
   // 一次性数据迁移：为旧的已完成任务补写 completedAt（优先用最后一条总结的时间）
   useEffect(() => {
@@ -143,6 +153,12 @@ const SimpleTasksPage: React.FC = () => {
   };
 
   const startTomato = (taskId: string) => {
+    // 若已有番茄钟在运行或暂停，则直接聚焦到番茄钟页面，禁止开启新实例
+    if (isRunning || isPaused) {
+      window.focus();
+      window.location.href = '/tomato';
+      return;
+    }
     const task = tasks.find(t => t.id === taskId);
     if (task) {
       // 如果任务是待办状态，改为进行中
@@ -193,6 +209,73 @@ const SimpleTasksPage: React.FC = () => {
       setNewTaskType(value);
       setCustomTypeInput('');
     }
+  };
+
+  const handleEditTypeChange = (value: string) => {
+    if (value === 'custom') {
+      setEditIsCustomType(true);
+      setEditType('');
+    } else {
+      setEditIsCustomType(false);
+      setEditType(value);
+      setEditCustomTypeInput('');
+    }
+  };
+
+  const openEditDialog = (task: Task) => {
+    setEditTask(task);
+    setEditTitle(task.title);
+    setEditPriority(task.priority);
+    setEditType(task.type);
+    setEditIsCustomType(false);
+    setEditCustomTypeInput('');
+    setEditError('');
+    setShowEditDialog(true);
+  };
+
+  const closeEditDialog = () => {
+    // 若有变更未保存可加确认，这里简单关闭
+    setShowEditDialog(false);
+    setEditTask(null);
+    setEditTitle('');
+    setEditPriority('medium');
+    setEditType('工作');
+    setEditIsCustomType(false);
+    setEditCustomTypeInput('');
+    setEditError('');
+  };
+
+  const submitEdit = () => {
+    const title = editTitle.trim();
+    if (!title) {
+      setEditError('标题不能为空');
+      return;
+    }
+    if (title.length > 100) {
+      setEditError('标题长度不能超过 100 字');
+      return;
+    }
+    const finalType = editIsCustomType ? editCustomTypeInput.trim() : editType;
+    if (!finalType) {
+      setEditError('任务类型不能为空');
+      return;
+    }
+    if (editIsCustomType && finalType.length > 30) {
+      setEditError('自定义类型长度不能超过 30 字');
+      return;
+    }
+    if (!editTask) return;
+
+    setTasks(tasks.map(t => {
+      if (t.id !== editTask.id) return t;
+      return {
+        ...t,
+        title,
+        priority: editPriority,
+        type: finalType,
+      };
+    }));
+    closeEditDialog();
   };
 
   const updateTaskStatus = (id: string, status: Task['status']) => {
@@ -381,6 +464,20 @@ const SimpleTasksPage: React.FC = () => {
                         <option value="in_progress">进行中</option>
                         <option value="completed">已完成</option>
                       </select>
+                      <button
+                        onClick={() => openEditDialog(task)}
+                        style={{
+                          padding: '4px 8px',
+                          backgroundColor: '#4b5563',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        编辑
+                      </button>
                       <button
                         onClick={() => deleteTask(task.id)}
                         style={{
@@ -813,6 +910,179 @@ const SimpleTasksPage: React.FC = () => {
                 }}
               >
                 关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Task Edit Dialog */}
+      {showEditDialog && editTask && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000
+          }}
+          onClick={closeEditDialog}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              width: '90%',
+              maxWidth: '500px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              zIndex: 2001
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', marginBottom: '20px' }}>
+              编辑任务
+            </h3>
+
+            {/* Title */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                任务标题 <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="请输入任务标题..."
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitEdit();
+                  if (e.key === 'Escape') closeEditDialog();
+                }}
+              />
+            </div>
+
+            {/* Priority */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                优先级
+              </label>
+              <select
+                value={editPriority}
+                onChange={(e) => setEditPriority(e.target.value as Task['priority'])}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="low">低优先级</option>
+                <option value="medium">中优先级</option>
+                <option value="high">高优先级</option>
+              </select>
+            </div>
+
+            {/* Type */}
+            <div style={{ marginBottom: '8px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                任务类型
+              </label>
+              <select
+                value={editIsCustomType ? 'custom' : editType}
+                onChange={(e) => handleEditTypeChange(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="工作">工作</option>
+                <option value="学习">学习</option>
+                <option value="生活">生活</option>
+                <option value="运动">运动</option>
+                <option value="娱乐">娱乐</option>
+                <option value="其他">其他</option>
+                <option value="custom">自定义...</option>
+              </select>
+              {editIsCustomType && (
+                <input
+                  type="text"
+                  value={editCustomTypeInput}
+                  onChange={(e) => setEditCustomTypeInput(e.target.value)}
+                  placeholder="请输入自定义类型..."
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                    marginTop: '8px'
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') submitEdit();
+                    if (e.key === 'Escape') closeEditDialog();
+                  }}
+                />
+              )}
+            </div>
+
+            {editError && (
+              <div style={{ color: '#ef4444', fontSize: '12px', marginBottom: '12px' }}>{editError}</div>
+            )}
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={closeEditDialog}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer'
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={submitEdit}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#0284c7',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer'
+                }}
+              >
+                保存
               </button>
             </div>
           </div>

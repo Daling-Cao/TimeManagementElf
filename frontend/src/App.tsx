@@ -7,7 +7,15 @@ import StatisticsPage from './pages/StatisticsPage';
 import { useTomatoStore } from './core/store/tomatoStore';
 
 function App() {
-  const { isRunning } = useTomatoStore();
+  const { isRunning, isPaused, resume } = useTomatoStore();
+
+  // 恢复持久化的计时器
+  useEffect(() => {
+    // 如果有运行中但未暂停的计时器，恢复它
+    if (isRunning && !isPaused) {
+      resume();
+    }
+  }, []); // 只在首次加载时执行
 
   // 添加网页关闭确认提示
   useEffect(() => {

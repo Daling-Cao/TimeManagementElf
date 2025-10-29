@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 interface Task {
   id: string;
@@ -17,7 +18,7 @@ interface TomatoState {
   isRunning: boolean;
   isPaused: boolean;
   selectedDuration: number;
-  sessionStartTime: Date | null;
+  sessionStartTime: string | null; // 改为 string 以便持久化
   currentTask: Task | null;
   
   start: (duration: number, task?: Task | null) => void;
@@ -31,7 +32,9 @@ interface TomatoState {
   setSelectedDuration: (duration: number) => void;
 }
 
-export const useTomatoStore = create<TomatoState>((set, get) => {
+export const useTomatoStore = create<TomatoState>()(
+  persist(
+    (set, get) => {
   // 定时器引用
   let intervalId: number | null = null;
 
@@ -93,12 +96,17 @@ export const useTomatoStore = create<TomatoState>((set, get) => {
     currentTask: null,
 
     start: (duration: number, task?: Task | null) => {
+      // 单例保护：若已有计时在运行或暂停，则忽略新的启动请求
+      const state = get();
+      if (state.isRunning || state.isPaused) {
+        return;
+      }
       set({
         timeRemaining: duration * 60,
         isRunning: true,
         isPaused: false,
         selectedDuration: duration,
-        sessionStartTime: new Date(),
+        sessionStartTime: new Date().toISOString(), // 转为字符串
         currentTask: task || null
       });
       startInterval();
@@ -159,5 +167,10 @@ export const useTomatoStore = create<TomatoState>((set, get) => {
       set({ selectedDuration: duration, timeRemaining: duration * 60 });
     }
   };
-});
+},
+    {
+      name: 'tomato-store' // localStorage key
+    }
+  )
+);
 

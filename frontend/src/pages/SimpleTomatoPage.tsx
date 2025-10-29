@@ -73,7 +73,7 @@ const SimpleTomatoPage: React.FC = () => {
     if (!sessionStartTime) return;
 
     const endTime = new Date();
-    const startTime = sessionStartTime;
+    const startTime = new Date(sessionStartTime); // 从字符串转换为 Date
     
     // 计算实际工作时长（分钟）
     const actualDurationMs = endTime.getTime() - startTime.getTime();
@@ -162,6 +162,11 @@ const SimpleTomatoPage: React.FC = () => {
   };
 
   const handleStart = () => {
+    // 双重检查：确保不会在已有计时时启动新的
+    if (isRunning || isPaused) {
+      alert('已有番茄钟正在运行或暂停中，请先完成当前番茄钟。');
+      return;
+    }
     start(selectedDuration, currentTask);
   };
 
@@ -443,7 +448,7 @@ const SimpleTomatoPage: React.FC = () => {
                 borderRadius: '6px'
               }}>
                 实际工作时长: <strong style={{ color: '#111827' }}>
-                  {Math.round((new Date().getTime() - sessionStartTime.getTime()) / 1000 / 60)} 分钟
+                  {Math.round((new Date().getTime() - new Date(sessionStartTime).getTime()) / 1000 / 60)} 分钟
                 </strong>
               </div>
             )}
