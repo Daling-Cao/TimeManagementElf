@@ -3,7 +3,7 @@ import { useTomatoStore } from '../core/store/tomatoStore';
 import { useNavigate } from 'react-router-dom';
 
 const FloatingTomatoTimer: React.FC = () => {
-  const { timeRemaining, isPaused, currentTask, pause, resume, stop } = useTomatoStore();
+  const { timeRemaining, isPaused, currentTask, pause, resume } = useTomatoStore();
   const [isMinimized, setIsMinimized] = useState(false);
   const navigate = useNavigate();
 
@@ -19,7 +19,7 @@ const FloatingTomatoTimer: React.FC = () => {
 
   const handleStop = () => {
     if (window.confirm('确定要停止当前番茄钟吗？')) {
-      stop();
+      navigate('/tomato?action=stop');
     }
   };
 

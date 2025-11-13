@@ -121,6 +121,42 @@ const SimpleTasksPage: React.FC = () => {
     localStorage.setItem('tasks', JSON.stringify(tasks));
   }, [tasks]);
 
+  // 监听页面焦点和 localStorage 变化，重新加载任务
+  useEffect(() => {
+    const handleFocus = () => {
+      const saved = localStorage.getItem('tasks');
+      if (saved) {
+        try {
+          const loadedTasks = JSON.parse(saved);
+          setTasks(loadedTasks);
+        } catch (err) {
+          console.error('加载任务失败:', err);
+        }
+      }
+    };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'tasks' && e.newValue) {
+        try {
+          const loadedTasks = JSON.parse(e.newValue);
+          setTasks(loadedTasks);
+        } catch (err) {
+          console.error('加载任务失败:', err);
+        }
+      }
+    };
+
+    // 页面获得焦点时重新加载
+    window.addEventListener('focus', handleFocus);
+    // 监听 localStorage 变化（跨标签页）
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
   const openDialog = () => {
     setShowDialog(true);
   };

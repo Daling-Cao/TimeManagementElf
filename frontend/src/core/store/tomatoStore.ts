@@ -11,6 +11,7 @@ interface Task {
   totalDuration?: number;
   completedSessions?: number;
   startedAt?: string;
+  completedAt?: string;
 }
 
 interface TomatoState {

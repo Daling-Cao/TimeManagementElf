@@ -36,10 +36,19 @@ const SimpleTomatoPage: React.FC = () => {
   const [summary, setSummary] = useState('');
   const [sessionCompleted, setSessionCompleted] = useState(false);
 
-  // 从 URL 加载任务
+  // 快速任务创建相关状态
+  const [showQuickTaskForm, setShowQuickTaskForm] = useState(false);
+  const [quickTaskTitle, setQuickTaskTitle] = useState('');
+  const [quickTaskPriority, setQuickTaskPriority] = useState<Task['priority']>('medium');
+  const [quickTaskType, setQuickTaskType] = useState('工作');
+  const [isCustomType, setIsCustomType] = useState(false);
+  const [customTypeInput, setCustomTypeInput] = useState('');
+
+  // 从 URL 加载任务和处理 action 参数
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const taskId = params.get('taskId');
+    const action = params.get('action');
     
     if (taskId) {
       const tasksJson = localStorage.getItem('tasks');
@@ -51,6 +60,16 @@ const SimpleTomatoPage: React.FC = () => {
         }
       }
     }
+    
+    // 处理停止操作
+    if (action === 'stop') {
+      if (isRunning || isPaused) {
+        stop();
+        setSessionCompleted(false);
+        setShowSummaryDialog(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 请求通知权限
@@ -69,7 +88,18 @@ const SimpleTomatoPage: React.FC = () => {
     }
   }, [timeRemaining, isRunning, sessionStartTime]);
 
-  const saveTomatoSession = (completed: boolean, summaryText: string) => {
+  // 清除 currentTask 的逻辑：当总结对话框显示且计时器已停止时清除
+  useEffect(() => {
+    if (showSummaryDialog && !isRunning && !isPaused) {
+      // 延迟清除，确保 handleSaveSummary 能获取到 currentTask
+      const timer = setTimeout(() => {
+        setCurrentTask(null);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [showSummaryDialog, isRunning, isPaused, setCurrentTask]);
+
+  const saveTomatoSession = (completed: boolean, summaryText: string, taskRef?: Task | null) => {
     if (!sessionStartTime) return;
 
     const endTime = new Date();
@@ -79,6 +109,9 @@ const SimpleTomatoPage: React.FC = () => {
     const actualDurationMs = endTime.getTime() - startTime.getTime();
     const actualDurationMinutes = Math.round(actualDurationMs / 1000 / 60);
 
+    // 使用传入的 taskRef 或 currentTask
+    const task = taskRef || currentTask;
+
     const sessionId = Date.now().toString();
     const session = {
       id: sessionId,
@@ -87,7 +120,7 @@ const SimpleTomatoPage: React.FC = () => {
       duration: actualDurationMinutes, // 使用实际时长
       plannedDuration: selectedDuration, // 保存计划时长
       completed,
-      taskId: currentTask?.id || null,
+      taskId: task?.id || null,
       summary: summaryText
     };
 
@@ -98,14 +131,14 @@ const SimpleTomatoPage: React.FC = () => {
     localStorage.setItem('tomatoSessions', JSON.stringify(sessions));
 
     // 如果有关联任务，更新任务的总结记录
-    if (currentTask) {
+    if (task) {
       const tasksJson = localStorage.getItem('tasks');
       if (tasksJson) {
         const tasks: Task[] = JSON.parse(tasksJson);
-        const taskIndex = tasks.findIndex(t => t.id === currentTask.id);
+        const taskIndex = tasks.findIndex(t => t.id === task.id);
         
         if (taskIndex !== -1) {
-          const task = tasks[taskIndex];
+          const taskToUpdate = tasks[taskIndex];
           const newSummary = {
             id: Date.now().toString(),
             sessionId: sessionId,
@@ -116,28 +149,34 @@ const SimpleTomatoPage: React.FC = () => {
           };
 
           tasks[taskIndex] = {
-            ...task,
-            summaries: [...(task.summaries || []), newSummary],
-            totalDuration: (task.totalDuration || 0) + actualDurationMinutes, // 累加实际时长
-            completedSessions: (task.completedSessions || 0) + (completed ? 1 : 0)
+            ...taskToUpdate,
+            summaries: [...(taskToUpdate.summaries || []), newSummary],
+            totalDuration: (taskToUpdate.totalDuration || 0) + actualDurationMinutes, // 累加实际时长
+            completedSessions: (taskToUpdate.completedSessions || 0) + (completed ? 1 : 0)
           };
 
           localStorage.setItem('tasks', JSON.stringify(tasks));
-          setCurrentTask(tasks[taskIndex]);
+          // 只有在 currentTask 还存在时才更新它
+          if (currentTask && currentTask.id === task.id) {
+            setCurrentTask(tasks[taskIndex]);
+          }
         }
       }
     }
   };
 
   const handleSaveSummary = (taskCompleted: boolean) => {
-    saveTomatoSession(sessionCompleted, summary);
+    // 在清除 currentTask 之前保存任务引用
+    const taskToSave = currentTask;
+    
+    saveTomatoSession(sessionCompleted, summary, taskToSave);
     
     // 如果任务完成，更新任务状态
-    if (taskCompleted && currentTask) {
+    if (taskCompleted && taskToSave) {
       const tasksJson = localStorage.getItem('tasks');
       if (tasksJson) {
         const tasks: Task[] = JSON.parse(tasksJson);
-        const taskIndex = tasks.findIndex(t => t.id === currentTask.id);
+        const taskIndex = tasks.findIndex(t => t.id === taskToSave.id);
         
         if (taskIndex !== -1) {
           tasks[taskIndex].status = 'completed';
@@ -152,6 +191,13 @@ const SimpleTomatoPage: React.FC = () => {
       setShowSummaryDialog(false);
       setSummary('');
       setSessionCompleted(false);
+      // 如果有关联任务，导航回任务列表以刷新显示
+      if (taskToSave) {
+        // 延迟导航，确保 localStorage 已更新
+        setTimeout(() => {
+          window.location.href = '/tasks';
+        }, 100);
+      }
     }
   };
 
@@ -167,7 +213,65 @@ const SimpleTomatoPage: React.FC = () => {
       alert('已有番茄钟正在运行或暂停中，请先完成当前番茄钟。');
       return;
     }
+    
+    // 如果没有选择任务，显示快速任务创建表单
+    if (!currentTask) {
+      setShowQuickTaskForm(true);
+      return;
+    }
+    
     start(selectedDuration, currentTask);
+  };
+
+  const handleTypeChange = (value: string) => {
+    if (value === 'custom') {
+      setIsCustomType(true);
+      setQuickTaskType('');
+    } else {
+      setIsCustomType(false);
+      setQuickTaskType(value);
+      setCustomTypeInput('');
+    }
+  };
+
+  const handleCreateQuickTask = () => {
+    if (!quickTaskTitle.trim()) {
+      alert('请输入任务标题');
+      return;
+    }
+
+    const finalType = isCustomType ? customTypeInput.trim() || '其他' : quickTaskType;
+    
+    // 创建新任务
+    const newTask: Task = {
+      id: Date.now().toString(),
+      title: quickTaskTitle.trim(),
+      status: 'in_progress',
+      priority: quickTaskPriority,
+      type: finalType,
+      summaries: [],
+      totalDuration: 0,
+      completedSessions: 0,
+      startedAt: new Date().toISOString()
+    };
+
+    // 保存到 localStorage
+    const tasksJson = localStorage.getItem('tasks');
+    const tasks: Task[] = tasksJson ? JSON.parse(tasksJson) : [];
+    tasks.push(newTask);
+    localStorage.setItem('tasks', JSON.stringify(tasks));
+
+    // 设置为当前任务并开始番茄钟
+    setCurrentTask(newTask);
+    setShowQuickTaskForm(false);
+    setQuickTaskTitle('');
+    setQuickTaskPriority('medium');
+    setQuickTaskType('工作');
+    setIsCustomType(false);
+    setCustomTypeInput('');
+    
+    // 开始番茄钟
+    start(selectedDuration, newTask);
   };
 
   const handlePause = () => {
@@ -326,7 +430,7 @@ const SimpleTomatoPage: React.FC = () => {
                   cursor: 'pointer'
                 }}
               >
-                开始专注 🍅
+                {currentTask ? '开始专注 🍅' : '创建任务并开始 🍅'}
               </button>
             </div>
           ) : (
@@ -555,6 +659,171 @@ const SimpleTomatoPage: React.FC = () => {
                   保存总结
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 快速任务创建对话框 */}
+      {showQuickTaskForm && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000
+          }}
+          onClick={() => setShowQuickTaskForm(false)}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              width: '90%',
+              maxWidth: '500px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              zIndex: 2001
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', marginBottom: '20px' }}>
+              快速创建任务
+            </h3>
+
+            {/* 任务标题 */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                任务标题 <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={quickTaskTitle}
+                onChange={(e) => setQuickTaskTitle(e.target.value)}
+                placeholder="请输入任务标题..."
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+                onKeyPress={(e) => e.key === 'Enter' && handleCreateQuickTask()}
+              />
+            </div>
+
+            {/* 优先级 */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                优先级
+              </label>
+              <select
+                value={quickTaskPriority}
+                onChange={(e) => setQuickTaskPriority(e.target.value as Task['priority'])}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="low">低优先级</option>
+                <option value="medium">中优先级</option>
+                <option value="high">高优先级</option>
+              </select>
+            </div>
+
+            {/* 任务类型 */}
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                任务类型
+              </label>
+              <select
+                value={isCustomType ? 'custom' : quickTaskType}
+                onChange={(e) => handleTypeChange(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="工作">工作</option>
+                <option value="学习">学习</option>
+                <option value="生活">生活</option>
+                <option value="运动">运动</option>
+                <option value="娱乐">娱乐</option>
+                <option value="其他">其他</option>
+                <option value="custom">自定义...</option>
+              </select>
+              
+              {isCustomType && (
+                <input
+                  type="text"
+                  value={customTypeInput}
+                  onChange={(e) => setCustomTypeInput(e.target.value)}
+                  placeholder="请输入自定义类型..."
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                    marginTop: '8px'
+                  }}
+                />
+              )}
+            </div>
+
+            {/* 按钮 */}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowQuickTaskForm(false)}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer'
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleCreateQuickTask}
+                disabled={!quickTaskTitle.trim()}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: quickTaskTitle.trim() ? '#ef4444' : '#d1d5db',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: quickTaskTitle.trim() ? 'pointer' : 'not-allowed'
+                }}
+              >
+                创建并开始
+              </button>
             </div>
           </div>
         </div>
