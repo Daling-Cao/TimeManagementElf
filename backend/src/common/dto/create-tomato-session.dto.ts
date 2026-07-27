@@ -1,4 +1,12 @@
-import { IsString, IsEnum, IsOptional, IsInt, IsDateString, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsEnum,
+  IsOptional,
+  IsInt,
+  IsDateString,
+  Min,
+  Max,
+} from 'class-validator';
 
 export enum SessionStatus {
   COMPLETED = 'COMPLETED',

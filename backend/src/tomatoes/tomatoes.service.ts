@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTomatoSessionDto } from '../common/dto/create-tomato-session.dto';
 import { TasksService } from '../tasks/tasks.service';
@@ -31,7 +32,7 @@ export class TomatoesService {
   }
 
   async findAll(userId: string, params?: { since?: string; task_id?: string }) {
-    const where: any = { user_id: userId };
+    const where: Prisma.TomatoSessionWhereInput = { user_id: userId };
 
     if (params?.since) {
       where.started_at = { gte: new Date(params.since) };
@@ -73,27 +74,38 @@ export class TomatoesService {
     });
 
     const totalSessions = sessions.length;
-    const totalMinutes = sessions.reduce((sum, session) => sum + session.actual_minutes, 0);
-    const completedSessions = sessions.filter(s => s.status === 'COMPLETED').length;
-    const interruptedSessions = sessions.filter(s => s.status === 'INTERRUPTED').length;
+    const totalMinutes = sessions.reduce(
+      (sum, session) => sum + session.actual_minutes,
+      0,
+    );
+    const completedSessions = sessions.filter(
+      (s) => s.status === 'COMPLETED',
+    ).length;
+    const interruptedSessions = sessions.filter(
+      (s) => s.status === 'INTERRUPTED',
+    ).length;
 
     // Group by date
-    const sessionsByDate = sessions.reduce((acc, session) => {
-      const date = session.started_at.toISOString().split('T')[0];
-      if (!acc[date]) {
-        acc[date] = { sessions: 0, minutes: 0 };
-      }
-      acc[date].sessions += 1;
-      acc[date].minutes += session.actual_minutes;
-      return acc;
-    }, {} as Record<string, { sessions: number; minutes: number }>);
+    const sessionsByDate = sessions.reduce(
+      (acc, session) => {
+        const date = session.started_at.toISOString().split('T')[0];
+        if (!acc[date]) {
+          acc[date] = { sessions: 0, minutes: 0 };
+        }
+        acc[date].sessions += 1;
+        acc[date].minutes += session.actual_minutes;
+        return acc;
+      },
+      {} as Record<string, { sessions: number; minutes: number }>,
+    );
 
     return {
       totalSessions,
       totalMinutes,
       completedSessions,
       interruptedSessions,
-      averageSessionLength: totalSessions > 0 ? totalMinutes / totalSessions : 0,
+      averageSessionLength:
+        totalSessions > 0 ? totalMinutes / totalSessions : 0,
       sessionsByDate,
     };
   }

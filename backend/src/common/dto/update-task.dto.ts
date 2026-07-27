@@ -1,4 +1,12 @@
-import { IsString, IsEnum, IsOptional, IsArray, IsInt, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsEnum,
+  IsOptional,
+  IsArray,
+  IsInt,
+  Min,
+  Max,
+} from 'class-validator';
 import { Priority } from './create-task.dto';
 
 export enum TaskStatus {

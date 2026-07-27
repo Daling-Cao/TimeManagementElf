@@ -1,10 +1,21 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from '../common/dto/create-task.dto';
 import { UpdateTaskDto } from '../common/dto/update-task.dto';
 import { CompleteTaskDto } from '../common/dto/complete-task.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/user.decorator';
+import type { AuthUser } from '../auth/auth-user.interface';
 
 @Controller('tasks')
 @UseGuards(JwtAuthGuard)
@@ -12,13 +23,13 @@ export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
 
   @Post()
-  create(@CurrentUser() user: any, @Body() createTaskDto: CreateTaskDto) {
+  create(@CurrentUser() user: AuthUser, @Body() createTaskDto: CreateTaskDto) {
     return this.tasksService.create(user.userId, createTaskDto);
   }
 
   @Get()
   findAll(
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthUser,
     @Query('since') since?: string,
     @Query('status') status?: string,
     @Query('type') type?: string,
@@ -27,13 +38,13 @@ export class TasksController {
   }
 
   @Get(':id')
-  findOne(@CurrentUser() user: any, @Param('id') id: string) {
+  findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.tasksService.findOne(user.userId, id);
   }
 
   @Patch(':id')
   update(
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() updateTaskDto: UpdateTaskDto,
   ) {
@@ -42,7 +53,7 @@ export class TasksController {
 
   @Patch(':id/complete')
   complete(
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() completeTaskDto: CompleteTaskDto,
   ) {
@@ -50,7 +61,7 @@ export class TasksController {
   }
 
   @Delete(':id')
-  remove(@CurrentUser() user: any, @Param('id') id: string) {
+  remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.tasksService.remove(user.userId, id);
   }
 }

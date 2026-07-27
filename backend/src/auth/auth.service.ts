@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from '../common/dto/login.dto';
 import { CreateUserDto } from '../common/dto/create-user.dto';
+import { JwtPayload } from './auth-user.interface';
 
 @Injectable()
 export class AuthService {
@@ -24,7 +25,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isPasswordValid = await this.usersService.validatePassword(password, user.password);
+    const isPasswordValid = await this.usersService.validatePassword(
+      password,
+      user.password,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -34,26 +38,30 @@ export class AuthService {
 
   async refreshToken(refreshToken: string) {
     try {
-      const payload = this.jwtService.verify(refreshToken, {
-        secret: process.env.JWT_REFRESH_SECRET || 'your-super-secret-refresh-key-change-this-in-production',
+      const payload = this.jwtService.verify<JwtPayload>(refreshToken, {
+        secret:
+          process.env.JWT_REFRESH_SECRET ||
+          'your-super-secret-refresh-key-change-this-in-production',
       });
 
       const user = await this.usersService.findById(payload.sub);
       return this.generateTokens(user.user_id, user.email);
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
 
   private generateTokens(userId: string, email: string) {
     const payload = { sub: userId, email };
-    
+
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: '15m',
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      secret: process.env.JWT_REFRESH_SECRET || 'your-super-secret-refresh-key-change-this-in-production',
+      secret:
+        process.env.JWT_REFRESH_SECRET ||
+        'your-super-secret-refresh-key-change-this-in-production',
       expiresIn: '7d',
     });
 

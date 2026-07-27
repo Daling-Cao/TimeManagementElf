@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
+import { Prisma, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto } from '../common/dto/create-task.dto';
 import { UpdateTaskDto } from '../common/dto/update-task.dto';
@@ -19,15 +24,18 @@ export class TasksService {
     return task;
   }
 
-  async findAll(userId: string, params?: { since?: string; status?: string; type?: string }) {
-    const where: any = { user_id: userId };
+  async findAll(
+    userId: string,
+    params?: { since?: string; status?: string; type?: string },
+  ) {
+    const where: Prisma.TaskWhereInput = { user_id: userId };
 
     if (params?.since) {
       where.updated_at = { gte: new Date(params.since) };
     }
 
     if (params?.status) {
-      where.status = params.status;
+      where.status = params.status as TaskStatus;
     }
 
     if (params?.type) {
@@ -68,7 +76,9 @@ export class TasksService {
 
     // Check version conflict
     if (existingTask.version !== updateTaskDto.version) {
-      throw new ConflictException('Version conflict. Please refresh and try again.');
+      throw new ConflictException(
+        'Version conflict. Please refresh and try again.',
+      );
     }
 
     const task = await this.prisma.task.update({
@@ -83,12 +93,18 @@ export class TasksService {
     return task;
   }
 
-  async complete(userId: string, taskId: string, completeTaskDto: CompleteTaskDto) {
+  async complete(
+    userId: string,
+    taskId: string,
+    completeTaskDto: CompleteTaskDto,
+  ) {
     const existingTask = await this.findOne(userId, taskId);
 
     // Check version conflict
     if (existingTask.version !== completeTaskDto.version) {
-      throw new ConflictException('Version conflict. Please refresh and try again.');
+      throw new ConflictException(
+        'Version conflict. Please refresh and try again.',
+      );
     }
 
     const task = await this.prisma.task.update({
@@ -115,7 +131,11 @@ export class TasksService {
     return { message: 'Task deleted successfully' };
   }
 
-  async updateStats(taskId: string, focusMinutes: number, actualMinutes: number) {
+  async updateStats(
+    taskId: string,
+    focusMinutes: number,
+    actualMinutes: number,
+  ) {
     await this.prisma.task.update({
       where: { task_id: taskId },
       data: {

@@ -12,20 +12,22 @@ async function bootstrap() {
   });
 
   // Enable validation pipes
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    forbidNonWhitelisted: true,
-    transform: true,
-  }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
 
   // Set global prefix
   app.setGlobalPrefix('api');
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
-  
+
   console.log(`🚀 Application is running on: http://localhost:${port}/api`);
   console.log(`📊 Health check: http://localhost:${port}/api/health`);
 }
 
-bootstrap();
+void bootstrap();
