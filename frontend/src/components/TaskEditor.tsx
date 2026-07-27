@@ -1,9 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Task } from '../core/types';
+import type { Task } from '../core/types';
+
+export interface TaskFormData {
+  title: string;
+  task_type: string;
+  priority: 'low' | 'medium' | 'high';
+  tags: string[];
+  estimate_minutes: number;
+  summary: string;
+}
 
 interface TaskEditorProps {
   task?: Task | null;
-  onSave: (taskData: any) => void;
+  onSave: (taskData: TaskFormData) => void;
   onCancel: () => void;
 }
 
@@ -32,7 +41,10 @@ const TaskEditor: React.FC<TaskEditorProps> = ({ task, onSave, onCancel }) => {
     }
   }, [task]);
 
-  const handleInputChange = (field: string, value: any) => {
+  const handleInputChange = (
+    field: keyof TaskFormData,
+    value: string | number | string[],
+  ) => {
     setFormData(prev => ({
       ...prev,
       [field]: value,

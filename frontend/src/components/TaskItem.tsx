@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Task } from '../core/types';
+import React from 'react';
+import type { Task } from '../core/types';
 
 interface TaskItemProps {
   task: Task;
@@ -14,8 +14,6 @@ const TaskItem: React.FC<TaskItemProps> = ({
   onUpdate,
   onDelete,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'high': return 'text-red-600 bg-red-50';
@@ -35,11 +33,11 @@ const TaskItem: React.FC<TaskItemProps> = ({
   };
 
   const handleStatusChange = (newStatus: string) => {
-    onUpdate(task.task_id, { status: newStatus as any });
+    onUpdate(task.task_id, { status: newStatus as Task['status'] });
   };
 
   const handlePriorityChange = (newPriority: string) => {
-    onUpdate(task.task_id, { priority: newPriority as any });
+    onUpdate(task.task_id, { priority: newPriority as Task['priority'] });
   };
 
   const formatDate = (dateString: string) => {

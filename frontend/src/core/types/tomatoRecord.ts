@@ -1,3 +1,5 @@
+import type { Task } from './task';
+
 export interface TomatoSession {
   session_id: string;
   user_id: string;
@@ -15,6 +17,7 @@ export interface CreateTomatoSessionRequest {
   task_id?: string;
   task_type: string;
   planned_minutes: number;
+  actual_minutes: number;
   started_at: string;
   ended_at: string;
   status: 'completed' | 'interrupted' | 'cancelled';

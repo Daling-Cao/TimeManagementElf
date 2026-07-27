@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTaskStore } from '../core/store';
-import { Task, CreateTaskRequest, SyncStatus } from '../core/types';
+import type { Task, CreateTaskRequest, SyncStatus } from '../core/types';
 import { syncService } from '../core/services/syncService';
 import TaskList from '../components/TaskList';
 
@@ -70,7 +70,7 @@ const TasksPage: React.FC = () => {
         estimate_minutes: taskData.estimate_minutes,
       };
       
-      const newTask = await syncService.createTask(request);
+      await syncService.createTask(request);
       // 更新本地状态
       const updatedTasks = await syncService.getLocalTasks();
       setTasks(updatedTasks);

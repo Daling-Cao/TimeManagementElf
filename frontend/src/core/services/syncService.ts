@@ -1,6 +1,7 @@
-import { Task, CreateTaskRequest, UpdateTaskRequest, CompleteTaskRequest, SyncStatus } from '../types';
+import type { Task, CreateTaskRequest, UpdateTaskRequest, CompleteTaskRequest, SyncStatus } from '../types';
 import { apiService } from './apiService';
 import { storageService } from './storageService';
+import type { SyncQueueItem } from './storageService';
 
 class SyncService {
   private isOnline: boolean = navigator.onLine;
@@ -186,11 +187,12 @@ class SyncService {
         await storageService.saveTask(serverTask);
         
         return serverTask;
-      } catch (error: any) {
+      } catch (error) {
         console.error('更新任务失败:', error);
-        
+
         // 如果是版本冲突，从服务器重新获取
-        if (error.message?.includes('conflict') || error.message?.includes('409')) {
+        const message = error instanceof Error ? error.message : '';
+        if (message.includes('conflict') || message.includes('409')) {
           console.warn('检测到版本冲突，将在下次同步时处理');
         }
         
@@ -334,26 +336,33 @@ class SyncService {
   /**
    * 处理单个同步队列项
    */
-  private async processSyncQueueItem(item: any): Promise<void> {
+  private async processSyncQueueItem(item: SyncQueueItem): Promise<void> {
     const { operation, data } = item;
 
     switch (operation) {
-      case 'create':
-        const serverTask = await apiService.createTask(data.request);
+      case 'create': {
+        const serverTask = await apiService.createTask(
+          data.request as CreateTaskRequest,
+        );
         // 删除临时任务
         if (data.tempId) {
-          await storageService.deleteTask(data.tempId);
+          await storageService.deleteTask(data.tempId as string);
         }
         await storageService.saveTask(serverTask);
         break;
+      }
 
-      case 'update':
-        const updatedTask = await apiService.updateTask(data.taskId, data.updates);
+      case 'update': {
+        const updatedTask = await apiService.updateTask(
+          data.taskId as string,
+          data.updates as UpdateTaskRequest,
+        );
         await storageService.saveTask(updatedTask);
         break;
+      }
 
       case 'delete':
-        await apiService.deleteTask(data.taskId);
+        await apiService.deleteTask(data.taskId as string);
         break;
 
       default:

@@ -1,4 +1,4 @@
-import { ApiResponse, PaginatedResponse, Task, TomatoSession, CreateTaskRequest, UpdateTaskRequest, CompleteTaskRequest, CreateTomatoSessionRequest } from '../types';
+import type { PaginatedResponse, Task, TomatoSession, CreateTaskRequest, UpdateTaskRequest, CompleteTaskRequest, CreateTomatoSessionRequest } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 
@@ -16,9 +16,9 @@ class ApiService {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...(options.headers as Record<string, string>),
     };
 
     if (this.token) {
@@ -130,16 +130,16 @@ class ApiService {
   }
 
   // Statistics methods
-  async getTaskStatistics(): Promise<any> {
-    return this.request<any>('/statistics/tasks');
+  async getTaskStatistics(): Promise<unknown> {
+    return this.request<unknown>('/statistics/tasks');
   }
 
-  async getTomatoStatistics(): Promise<any> {
-    return this.request<any>('/statistics/tomato-sessions');
+  async getTomatoStatistics(): Promise<unknown> {
+    return this.request<unknown>('/statistics/tomato-sessions');
   }
 
-  async getSummaryStatistics(): Promise<any> {
-    return this.request<any>('/statistics/summary');
+  async getSummaryStatistics(): Promise<unknown> {
+    return this.request<unknown>('/statistics/summary');
   }
 }
 

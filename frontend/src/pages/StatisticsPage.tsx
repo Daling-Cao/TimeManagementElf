@@ -42,6 +42,37 @@ interface TypeStats {
   avgDuration: number;
 }
 
+interface TaskSummary {
+  id: string | number;
+  timestamp: string;
+  completed?: boolean;
+  duration?: number;
+  summary?: string;
+}
+
+interface StoredTask {
+  title?: string;
+  status?: string;
+  priority?: string;
+  type?: string;
+  completedAt: string;
+  completedSessions?: number;
+  totalDuration?: number;
+  summaries?: TaskSummary[];
+}
+
+interface StoredSession {
+  startTime?: string;
+  duration?: number;
+}
+
+interface TypeAccumulator {
+  count: number;
+  completed: number;
+  sessions: number;
+  duration: number;
+}
+
 const StatisticsPage: React.FC = () => {
   const { isRunning } = useTomatoStore();
   
@@ -72,11 +103,12 @@ const StatisticsPage: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'all'>('week');
   const [sortBy, setSortBy] = useState<'name' | 'duration' | 'sessions'>('duration');
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
-  const [historyTasks, setHistoryTasks] = useState<any[]>([]);
-  const [selectedHistoryTask, setSelectedHistoryTask] = useState<any | null>(null);
+  const [historyTasks, setHistoryTasks] = useState<StoredTask[]>([]);
+  const [selectedHistoryTask, setSelectedHistoryTask] = useState<StoredTask | null>(null);
 
   useEffect(() => {
     loadStatistics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPeriod]);
 
   const loadStatistics = () => {
@@ -93,21 +125,21 @@ const StatisticsPage: React.FC = () => {
     let tasks = allTasks;
     if (selectedPeriod === 'today') {
       // 今天：排除今天之前完成的任务
-      tasks = allTasks.filter((t: any) => {
+      tasks = allTasks.filter((t: StoredTask) => {
         if (t.status !== 'completed') return true;
         if (!t.completedAt) return true;
         return new Date(t.completedAt) >= todayStart;
       });
     } else if (selectedPeriod === 'week') {
       // 本周：排除本周之前完成的任务
-      tasks = allTasks.filter((t: any) => {
+      tasks = allTasks.filter((t: StoredTask) => {
         if (t.status !== 'completed') return true;
         if (!t.completedAt) return true;
         return new Date(t.completedAt) >= weekStart;
       });
     } else if (selectedPeriod === 'month') {
       // 本月：排除本月之前完成的任务
-      tasks = allTasks.filter((t: any) => {
+      tasks = allTasks.filter((t: StoredTask) => {
         if (t.status !== 'completed') return true;
         if (!t.completedAt) return true;
         return new Date(t.completedAt) >= monthStart;
@@ -116,9 +148,9 @@ const StatisticsPage: React.FC = () => {
     // 'all' 显示所有任务
 
     // 计算任务统计
-    const completed = tasks.filter((t: any) => t.status === 'completed').length;
-    const inProgress = tasks.filter((t: any) => t.status === 'in_progress').length;
-    const pending = tasks.filter((t: any) => t.status === 'pending').length;
+    const completed = tasks.filter((t: StoredTask) => t.status === 'completed').length;
+    const inProgress = tasks.filter((t: StoredTask) => t.status === 'in_progress').length;
+    const pending = tasks.filter((t: StoredTask) => t.status === 'pending').length;
     const total = tasks.length;
     const completionRate = total > 0 ? (completed / total) * 100 : 0;
 
@@ -131,9 +163,9 @@ const StatisticsPage: React.FC = () => {
     });
 
     // 计算优先级统计
-    const high = tasks.filter((t: any) => t.priority === 'high').length;
-    const medium = tasks.filter((t: any) => t.priority === 'medium').length;
-    const low = tasks.filter((t: any) => t.priority === 'low').length;
+    const high = tasks.filter((t: StoredTask) => t.priority === 'high').length;
+    const medium = tasks.filter((t: StoredTask) => t.priority === 'medium').length;
+    const low = tasks.filter((t: StoredTask) => t.priority === 'low').length;
 
     setPriorityStats({ high, medium, low });
 
@@ -141,15 +173,15 @@ const StatisticsPage: React.FC = () => {
     const tomatoSessionsJson = localStorage.getItem('tomatoSessions');
     const tomatoSessions = tomatoSessionsJson ? JSON.parse(tomatoSessionsJson) : [];
 
-    const todaySessions = tomatoSessions.filter((s: any) => 
-      new Date(s.startTime) >= todayStart
+    const todaySessions = tomatoSessions.filter((s: StoredSession) => 
+      new Date(s.startTime || 0) >= todayStart
     ).length;
 
-    const weekSessions = tomatoSessions.filter((s: any) => 
-      new Date(s.startTime) >= weekStart
+    const weekSessions = tomatoSessions.filter((s: StoredSession) => 
+      new Date(s.startTime || 0) >= weekStart
     ).length;
 
-    const totalMinutes = tomatoSessions.reduce((sum: number, s: any) => 
+    const totalMinutes = tomatoSessions.reduce((sum: number, s: StoredSession) => 
       sum + (s.duration || 25), 0
     );
 
@@ -164,7 +196,7 @@ const StatisticsPage: React.FC = () => {
     });
 
     // 计算按任务名称统计
-    const taskDetails: TaskDetailStats[] = tasks.map((task: any) => ({
+    const taskDetails: TaskDetailStats[] = tasks.map((task: StoredTask) => ({
       name: task.title,
       status: task.status,
       sessions: task.completedSessions || 0,
@@ -175,8 +207,8 @@ const StatisticsPage: React.FC = () => {
     setTaskDetailStats(taskDetails);
 
     // 计算按类型统计
-    const typeStatsMap: Record<string, any> = {};
-    tasks.forEach((task: any) => {
+    const typeStatsMap: Record<string, TypeAccumulator> = {};
+    tasks.forEach((task: StoredTask) => {
       const type = task.type || '其他';
       if (!typeStatsMap[type]) {
         typeStatsMap[type] = { count: 0, completed: 0, sessions: 0, duration: 0 };
@@ -279,11 +311,11 @@ const StatisticsPage: React.FC = () => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     
-    const history = allTasks.filter((t: any) => {
+    const history = allTasks.filter((t: StoredTask) => {
       if (t.status !== 'completed') return false;
       if (!t.completedAt) return false;
       return new Date(t.completedAt) < todayStart;
-    }).sort((a: any, b: any) => {
+    }).sort((a: StoredTask, b: StoredTask) => {
       // 按完成时间倒序排列
       return new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime();
     });
@@ -292,7 +324,7 @@ const StatisticsPage: React.FC = () => {
     setShowHistoryDialog(true);
   };
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityColor = (priority?: string) => {
     switch (priority) {
       case 'high': return '#ef4444';
       case 'medium': return '#f59e0b';
@@ -884,7 +916,7 @@ const StatisticsPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {historyTasks.map((task: any, index: number) => (
+                    {historyTasks.map((task: StoredTask, index: number) => (
                       <tr
                         key={index}
                         style={{
@@ -1072,8 +1104,8 @@ const StatisticsPage: React.FC = () => {
               {selectedHistoryTask.summaries && selectedHistoryTask.summaries.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {[...selectedHistoryTask.summaries]
-                    .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                    .map((summary: any) => (
+                    .sort((a: TaskSummary, b: TaskSummary) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                    .map((summary: TaskSummary) => (
                       <div
                         key={summary.id}
                         style={{

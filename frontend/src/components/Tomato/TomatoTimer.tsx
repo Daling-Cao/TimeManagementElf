@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTimerStore } from '../../core/store';
-import { Task, CreateTomatoSessionRequest } from '../../core/types';
+import type { Task, CreateTomatoSessionRequest } from '../../core/types';
 import { apiService } from '../../core/services/apiService';
 
 interface TomatoTimerProps {
@@ -30,7 +30,7 @@ const TomatoTimer: React.FC<TomatoTimerProps> = ({ selectedTask, onComplete, onI
 
   // 倒计时逻辑
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
 
     if (isRunning && !isPaused && timeRemaining > 0) {
       interval = setInterval(() => {
@@ -44,6 +44,7 @@ const TomatoTimer: React.FC<TomatoTimerProps> = ({ selectedTask, onComplete, onI
     return () => {
       if (interval) clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRunning, isPaused, timeRemaining]);
 
   const handleComplete = async () => {

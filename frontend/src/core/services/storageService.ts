@@ -1,5 +1,18 @@
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
-import { Task, TomatoSession } from '../types';
+import { openDB } from 'idb';
+import type { DBSchema, IDBPDatabase } from 'idb';
+import type { Task, TomatoSession } from '../types';
+
+export type SyncOperation = 'create' | 'update' | 'delete';
+export type SyncTable = 'tasks' | 'tomato_sessions';
+
+export interface SyncQueueItem {
+  id: string;
+  operation: SyncOperation;
+  table: SyncTable;
+  data: Record<string, unknown>;
+  timestamp: number;
+  retryCount: number;
+}
 
 interface TimeManagementDB extends DBSchema {
   tasks: {
@@ -14,20 +27,13 @@ interface TimeManagementDB extends DBSchema {
   };
   sync_queue: {
     key: string;
-    value: {
-      id: string;
-      operation: 'create' | 'update' | 'delete';
-      table: 'tasks' | 'tomato_sessions';
-      data: any;
-      timestamp: number;
-      retryCount: number;
-    };
+    value: SyncQueueItem;
   };
   settings: {
     key: string;
     value: {
       key: string;
-      value: any;
+      value: unknown;
     };
   };
 }
@@ -130,9 +136,9 @@ class StorageService {
 
   // Sync queue methods
   async addToSyncQueue(operation: {
-    operation: 'create' | 'update' | 'delete';
-    table: 'tasks' | 'tomato_sessions';
-    data: any;
+    operation: SyncOperation;
+    table: SyncTable;
+    data: Record<string, unknown>;
   }): Promise<void> {
     const db = await this.ensureDB();
     const queueItem = {
@@ -144,7 +150,7 @@ class StorageService {
     await db.put('sync_queue', queueItem);
   }
 
-  async getSyncQueue(): Promise<any[]> {
+  async getSyncQueue(): Promise<SyncQueueItem[]> {
     const db = await this.ensureDB();
     return db.getAll('sync_queue');
   }
@@ -160,12 +166,12 @@ class StorageService {
   }
 
   // Settings methods
-  async saveSetting(key: string, value: any): Promise<void> {
+  async saveSetting(key: string, value: unknown): Promise<void> {
     const db = await this.ensureDB();
     await db.put('settings', { key, value });
   }
 
-  async getSetting(key: string): Promise<any> {
+  async getSetting(key: string): Promise<unknown> {
     const db = await this.ensureDB();
     const setting = await db.get('settings', key);
     return setting?.value;
@@ -185,7 +191,7 @@ class StorageService {
   }
 
   async getLastSyncTime(): Promise<string | null> {
-    return this.getSetting('last_sync_at');
+    return (await this.getSetting('last_sync_at')) as string | null;
   }
 
   async setLastSyncTime(timestamp: string): Promise<void> {

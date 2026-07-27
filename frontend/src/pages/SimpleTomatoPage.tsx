@@ -7,7 +7,7 @@ interface Task {
   status: 'pending' | 'in_progress' | 'completed';
   priority: 'low' | 'medium' | 'high';
   type: string;
-  summaries?: any[];
+  summaries?: unknown[];
   totalDuration?: number;
   completedSessions?: number;
   startedAt?: string;

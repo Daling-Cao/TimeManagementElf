@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { TimerState, TimerConfig, Task } from '../types';
+import type { TimerState, TimerConfig, Task } from '../types';
 
 interface TimerStore extends TimerState {
   config: TimerConfig;
@@ -22,7 +22,7 @@ const defaultConfig: TimerConfig = {
   soundEnabled: true,
 };
 
-export const useTimerStore = create<TimerStore>((set, get) => ({
+export const useTimerStore = create<TimerStore>((set) => ({
   isRunning: false,
   isPaused: false,
   timeRemaining: 0,
@@ -43,12 +43,12 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
     });
   },
   
-  pauseTimer: () => set((state) => ({
+  pauseTimer: () => set(() => ({
     isRunning: false,
     isPaused: true,
   })),
   
-  resumeTimer: () => set((state) => ({
+  resumeTimer: () => set(() => ({
     isRunning: true,
     isPaused: false,
   })),

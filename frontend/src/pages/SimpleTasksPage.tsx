@@ -114,6 +114,7 @@ const SimpleTasksPage: React.FC = () => {
     } catch (err) {
       console.error('迁移任务 completedAt 字段时出错:', err);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 保存任务到 localStorage

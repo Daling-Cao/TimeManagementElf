@@ -2,7 +2,7 @@ import React from 'react';
 import { useTaskStore, useTimerStore } from '../core/store';
 
 const HomePage: React.FC = () => {
-  const { tasks, getTasksByStatus } = useTaskStore();
+  const { getTasksByStatus } = useTaskStore();
   const { currentTask, isRunning, timeRemaining } = useTimerStore();
 
   const todoTasks = getTasksByStatus('todo');

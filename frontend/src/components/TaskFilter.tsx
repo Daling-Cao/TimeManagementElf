@@ -1,20 +1,22 @@
 import React from 'react';
 
+export interface TaskFilterState {
+  status: 'all' | 'todo' | 'in_progress' | 'done';
+  priority: 'all' | 'low' | 'medium' | 'high';
+  type: string;
+}
+
 interface TaskFilterProps {
-  filter: {
-    status: 'all' | 'todo' | 'in_progress' | 'done';
-    priority: 'all' | 'low' | 'medium' | 'high';
-    type: string;
-  };
-  onFilterChange: (filter: any) => void;
+  filter: TaskFilterState;
+  onFilterChange: (filter: TaskFilterState) => void;
 }
 
 const TaskFilter: React.FC<TaskFilterProps> = ({ filter, onFilterChange }) => {
-  const handleFilterChange = (field: string, value: string) => {
+  const handleFilterChange = (field: keyof TaskFilterState, value: string) => {
     onFilterChange({
       ...filter,
       [field]: value,
-    });
+    } as TaskFilterState);
   };
 
   return (

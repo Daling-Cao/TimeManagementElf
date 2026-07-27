@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useTaskStore, useTimerStore } from '../core/store';
 import { syncService } from '../core/services/syncService';
-import { Task } from '../core/types';
 import TomatoTimer from '../components/Tomato/TomatoTimer';
 import TomatoConfig from '../components/Tomato/TomatoConfig';
 
 const TomatoPage: React.FC = () => {
   const { tasks, setTasks } = useTaskStore();
-  const { currentTask, startTimer } = useTimerStore();
+  const { currentTask } = useTimerStore();
   const [loading, setLoading] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showConfig, setShowConfig] = useState(false);

@@ -15,6 +15,7 @@ function App() {
     if (isRunning && !isPaused) {
       resume();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在首次加载时执行
 
   // 添加网页关闭确认提示

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Task } from '../core/types';
+import type { Task } from '../core/types';
 import TaskItem from './TaskItem';
 import TaskEditor from './TaskEditor';
+import type { TaskFormData } from './TaskEditor';
 import TaskFilter from './TaskFilter';
 
 interface TaskListProps {
@@ -42,11 +43,16 @@ const TaskList: React.FC<TaskListProps> = ({
     setShowEditor(true);
   };
 
-  const handleSaveTask = (taskData: any) => {
+  const handleSaveTask = (taskData: TaskFormData) => {
     if (editingTask) {
       onTaskUpdate(editingTask.task_id, taskData);
     } else {
-      onTaskCreate(taskData);
+      onTaskCreate(
+        taskData as Omit<
+          Task,
+          'task_id' | 'created_at' | 'updated_at' | 'version'
+        >,
+      );
     }
     setShowEditor(false);
     setEditingTask(null);
