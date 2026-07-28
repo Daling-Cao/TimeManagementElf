@@ -12,6 +12,10 @@ let petWindow = null;
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
 
+// Theme list reported by the pet renderer (for the context menu).
+let petThemes = [];
+let petSelectedTheme = '';
+
 function loadRoute(win, htmlFile) {
   if (isDev) {
     win.loadURL(`${DEV_URL}/${htmlFile}`);
@@ -119,6 +123,21 @@ function showPetMenu() {
     { label: '打开 / 隐藏主界面', click: toggleMainWindow },
     { type: 'separator' },
     {
+      label: '主题',
+      submenu:
+        petThemes.length > 0
+          ? petThemes.map((t) => ({
+              label: t.name,
+              type: 'radio',
+              checked: t.id === petSelectedTheme,
+              click: () => {
+                petSelectedTheme = t.id;
+                sendPetState({ type: 'theme', id: t.id });
+              },
+            }))
+          : [{ label: '（加载中…）', enabled: false }],
+    },
+    {
       label: '预览动作',
       submenu: [
         { label: '😴 闲置 · 睡觉', click: () => sendPetState({ type: 'preview', state: 'idle' }) },
@@ -144,6 +163,10 @@ ipcMain.on('pet:move', (_event, x, y) => {
 });
 ipcMain.on('main:toggle', toggleMainWindow);
 ipcMain.on('pet:contextmenu', showPetMenu);
+ipcMain.on('pet:themes', (_event, payload) => {
+  petThemes = (payload && payload.themes) || [];
+  petSelectedTheme = (payload && payload.selectedId) || '';
+});
 ipcMain.on('pet:focus', (_event, active, title) =>
   sendPetState({ type: 'focus', active: !!active, title: title || '' }),
 );

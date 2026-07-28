@@ -1,0 +1,18 @@
+{
+  "themes": [
+    {
+      "id": "pixel",
+      "name": "像素橘猫（内置）",
+      "kind": "builtin",
+      "pixelated": true
+    },
+    {
+      "id": "pixel-gif",
+      "name": "像素橘猫 · GIF",
+      "kind": "image",
+      "dir": "themes/pixel-gif",
+      "ext": "gif",
+      "pixelated": true
+    }
+  ]
+}

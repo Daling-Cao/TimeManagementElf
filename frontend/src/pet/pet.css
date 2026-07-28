@@ -51,6 +51,19 @@ body,
   filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.22));
 }
 
+/* Image/GIF theme frame. */
+.pet-theme-img {
+  display: block;
+  width: 190px;
+  height: 190px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.22));
+  -webkit-user-drag: none;
+}
+.pet-theme-img--pixelated {
+  image-rendering: pixelated;
+}
+
 /* Per-state motion (frames handle the character; CSS adds life). */
 .pet--idle .pet-cat-wrap {
   animation: breathe 3.4s ease-in-out infinite;

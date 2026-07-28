@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import PixelCat from './PixelCat';
+import PetView from './PetView';
+import {
+  DEFAULT_THEME_ID,
+  THEMES,
+  getTheme,
+  loadThemeId,
+  saveThemeId,
+} from './theme';
 import type { PetVisualState } from './petAPI';
 
 const DRAG_THRESHOLD = 4; // px of movement before it counts as a drag
@@ -17,6 +24,8 @@ const DesktopPet = () => {
   const [dragging, setDragging] = useState(false);
   const [petState, setPetState] = useState<PetVisualState>('idle');
   const [focusTitle, setFocusTitle] = useState('');
+  const [themeId, setThemeId] = useState<string>(() => loadThemeId());
+  const theme = getTheme(themeId);
 
   const stateRef = useRef<PetVisualState>('idle');
   const nextPlayAt = useRef(0);
@@ -26,6 +35,14 @@ const DesktopPet = () => {
     stateRef.current = next;
     setPetState(next);
   }, []);
+
+  // Keep the main-process context menu's theme list + selection in sync.
+  useEffect(() => {
+    window.petAPI?.reportThemes({
+      themes: THEMES.map((t) => ({ id: t.id, name: t.name })),
+      selectedId: themeId,
+    });
+  }, [themeId]);
 
   // ---- state machine / scheduler ------------------------------------------
   useEffect(() => {
@@ -64,6 +81,9 @@ const DesktopPet = () => {
         } else if (stateRef.current === 'focus') {
           goIdle();
         }
+      } else if (data.type === 'theme') {
+        setThemeId(data.id);
+        saveThemeId(data.id);
       } else if (data.type === 'celebrate') {
         enterTransient('celebrate', CELEBRATE_DURATION_MS);
       } else if (data.type === 'preview') {
@@ -162,7 +182,16 @@ const DesktopPet = () => {
           petState !== 'focus' &&
           !dragging && <div className="pet-bubble">{bubbleText[petState]}</div>}
         <div className="pet-cat-wrap">
-          <PixelCat state={petState} scale={12} />
+          <PetView
+            theme={theme}
+            state={petState}
+            scale={12}
+            onImageError={() => {
+              // A broken/missing theme asset falls back to the built-in cat.
+              setThemeId(DEFAULT_THEME_ID);
+              saveThemeId(DEFAULT_THEME_ID);
+            }}
+          />
         </div>
         <div className="pet-shadow" />
       </div>
