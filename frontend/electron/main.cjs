@@ -33,6 +33,8 @@ function createMainWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Keep the pomodoro timer accurate even while the window is hidden.
+      backgroundThrottling: false,
     },
   });
 
@@ -86,7 +88,14 @@ function createPetWindow() {
 
   // Keep the pet above normal windows (incl. most full-screen apps).
   petWindow.setAlwaysOnTop(true, 'screen-saver');
-  loadRoute(petWindow, 'pet.html');
+
+  // PET_FAST shortens the playful cooldown (for demos/tests).
+  const fast = !!process.env.PET_FAST;
+  if (isDev) {
+    petWindow.loadURL(`${DEV_URL}/pet.html${fast ? '?fast' : ''}`);
+  } else {
+    petWindow.loadFile(path.join(DIST, 'pet.html'), fast ? { search: 'fast' } : undefined);
+  }
 }
 
 function toggleMainWindow() {
@@ -99,9 +108,25 @@ function toggleMainWindow() {
   }
 }
 
+function sendPetState(state) {
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.webContents.send('pet:state', state);
+  }
+}
+
 function showPetMenu() {
   const template = [
     { label: '打开 / 隐藏主界面', click: toggleMainWindow },
+    { type: 'separator' },
+    {
+      label: '预览动作',
+      submenu: [
+        { label: '😴 闲置 · 睡觉', click: () => sendPetState({ type: 'preview', state: 'idle' }) },
+        { label: '🐱 定时 · 猫头', click: () => sendPetState({ type: 'preview', state: 'focus' }) },
+        { label: '🚩 完成 · 挥旗', click: () => sendPetState({ type: 'preview', state: 'celebrate' }) },
+        { label: '✨ 调皮 · 蹦跳', click: () => sendPetState({ type: 'preview', state: 'play' }) },
+      ],
+    },
     { type: 'separator' },
     {
       label: '退出',
@@ -119,6 +144,8 @@ ipcMain.on('pet:move', (_event, x, y) => {
 });
 ipcMain.on('main:toggle', toggleMainWindow);
 ipcMain.on('pet:contextmenu', showPetMenu);
+ipcMain.on('pet:focus', (_event, active) => sendPetState({ type: 'focus', active: !!active }));
+ipcMain.on('pet:celebrate', () => sendPetState({ type: 'celebrate' }));
 ipcMain.on('app:quit', () => {
   app.isQuitting = true;
   app.quit();

@@ -1,0 +1,218 @@
+{
+  "size": 16,
+  "palette": {
+    "K": "#35271a",
+    "O": "#f4a24c",
+    "L": "#ffd08a",
+    "D": "#d67a2c",
+    "W": "#fff6ea",
+    "P": "#f2a0b0",
+    "E": "#201812",
+    "R": "#e8473d",
+    "S": "#b83a30",
+    "B": "#bfe6ff",
+    "G": "#6b4a2a"
+  },
+  "states": {
+    "idle": {
+      "fps": 2,
+      "frames": [
+        [
+          "................",
+          "............BB..",
+          "..........B.....",
+          "................",
+          "....KK....KK....",
+          "...KOOKKKKOOK...",
+          "..KOOOOOOOOOOK..",
+          ".KOOOOOOOOOOOOK.",
+          ".KOEEOOOOOOOOOK.",
+          ".KOOOOOOOOOOOWK.",
+          ".KOOOOOOOOOOWWK.",
+          ".KODDOOOODDOOOK.",
+          ".KWWOOOOOOOOWWK.",
+          "..KKKKKKKKKKKK..",
+          "................",
+          "................"
+        ],
+        [
+          "...........B....",
+          "..........B.....",
+          "................",
+          "................",
+          "....KK....KK....",
+          "...KOOKKKKOOK...",
+          "..KOOOOOOOOOOK..",
+          ".KOOOOOOOOOOOOK.",
+          ".KOEEOOOOOOOOOK.",
+          ".KOOOOOOOOOOOWK.",
+          ".KOOOOOOOOOOWWK.",
+          ".KODDOOOODDOOOK.",
+          ".KWWOOOOOOOOWWK.",
+          "..KKKKKKKKKKKK..",
+          "................",
+          "................"
+        ]
+      ]
+    },
+    "focus": {
+      "fps": 2,
+      "frames": [
+        [
+          "...K........K...",
+          "..KOK......KOK..",
+          ".KOPK......KPOK.",
+          "..KKKKKKKKKKKK..",
+          ".KOOOOOOOOOOOOK.",
+          ".KOOOOOOOOOOOOK.",
+          ".KOOEEOOOOEEOOK.",
+          ".KOOOOOOOOOOOOK.",
+          ".KOOOOOPPOOOOOK.",
+          ".KOOOOWPPWOOOOK.",
+          ".KOOOWWWWWWOOOK.",
+          ".KOOOOOOOOOOOOK.",
+          "..KOOOOOOOOOOK..",
+          "...KKKKKKKKKK...",
+          "................",
+          "................"
+        ],
+        [
+          "...K........K...",
+          "..KOK......KOK..",
+          ".KOPK......KPOK.",
+          "..KKKKKKKKKKKK..",
+          ".KOOOOOOOOOOOOK.",
+          ".KOOOOOOOOOOOOK.",
+          ".KOOKKOOOOKKOOK.",
+          ".KOOOOOOOOOOOOK.",
+          ".KOOOOOPPOOOOOK.",
+          ".KOOOOWPPWOOOOK.",
+          ".KOOOWWWWWWOOOK.",
+          ".KOOOOOOOOOOOOK.",
+          "..KOOOOOOOOOOK..",
+          "...KKKKKKKKKK...",
+          "................",
+          "................"
+        ]
+      ]
+    },
+    "celebrate": {
+      "fps": 6,
+      "frames": [
+        [
+          "................",
+          ".........GRRRR..",
+          ".........GRRRR..",
+          ".........GRRR...",
+          "...KK....G......",
+          "..KOOK...G......",
+          "..KOEK..WG......",
+          "..KOOK.WOG......",
+          ".KOOOOWOOG......",
+          ".KOOOOOOOK......",
+          ".KODDOODOK......",
+          ".KOOOOOOOK......",
+          ".KWWOOOWWK......",
+          "..KKKKKKK.......",
+          "................",
+          "................"
+        ],
+        [
+          "................",
+          ".........G......",
+          ".........GRRRR..",
+          ".........GRRRRR.",
+          "...KK....GRRR...",
+          "..KOOK...G......",
+          "..KOEK..WG......",
+          "..KOOK.WOG......",
+          ".KOOOOWOOG......",
+          ".KOOOOOOOK......",
+          ".KODDOODOK......",
+          ".KOOOOOOOK......",
+          ".KWWOOOWWK......",
+          "..KKKKKKK.......",
+          "................",
+          "................"
+        ],
+        [
+          "................",
+          ".........GRR....",
+          ".........GRRRRR.",
+          ".........GRRR...",
+          "...KK....G......",
+          "..KOOK...G......",
+          "..KOEK..WG......",
+          "..KOOK.WOG......",
+          ".KOOOOWOOG......",
+          ".KOOOOOOOK......",
+          ".KODDOODOK......",
+          ".KOOOOOOOK......",
+          ".KWWOOOWWK......",
+          "..KKKKKKK.......",
+          "................",
+          "................"
+        ]
+      ]
+    },
+    "play": {
+      "fps": 8,
+      "frames": [
+        [
+          "................",
+          "................",
+          "................",
+          "................",
+          "................",
+          "................",
+          "................",
+          "................",
+          "................",
+          "...KK....KK.....",
+          "..KOOKKKKOOK....",
+          "..KOEOOOOEOK....",
+          "..KOOOOOOOOK....",
+          ".KWKOOOOOOKWK...",
+          "..KKKKKKKKKK....",
+          "................"
+        ],
+        [
+          "................",
+          "...KK....KK.....",
+          "..KOOKKKKOOK....",
+          "..KOEOOOOEOK....",
+          "..KOOOOOOOOK....",
+          "..KODDOODDOK....",
+          "..KOOOOOOOOK....",
+          "..KWOOOOOOWK....",
+          "...KOOOOOOK.....",
+          "...WK....KW.....",
+          "..W........W....",
+          "................",
+          "................",
+          "................",
+          "................",
+          "................"
+        ],
+        [
+          "................",
+          "................",
+          "................",
+          "................",
+          "................",
+          "................",
+          "................",
+          "................",
+          "................",
+          "...KK....KK.....",
+          "..KOOKKKKOOK....",
+          "..KOEOOOOEOK....",
+          "..KOOOOOOOOK....",
+          ".KWKOOOOOOKWK...",
+          ".WKKKKKKKKKKW...",
+          "................"
+        ]
+      ]
+    }
+  }
+}
