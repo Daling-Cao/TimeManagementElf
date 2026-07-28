@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import SimpleHomePage from './pages/SimpleHomePage';
 import SimpleTasksPage from './pages/SimpleTasksPage';
 import SimpleTomatoPage from './pages/SimpleTomatoPage';

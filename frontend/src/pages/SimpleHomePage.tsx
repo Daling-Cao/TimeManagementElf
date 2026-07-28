@@ -36,9 +36,7 @@ const SimpleHomePage: React.FC = () => {
 
         <div style={{ display: 'flex', gap: '16px', marginTop: '24px', flexWrap: 'wrap' }}>
           <a
-            href="/tasks"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="#/tasks"
             style={{
               display: 'inline-block',
               padding: '12px 24px',
@@ -53,7 +51,7 @@ const SimpleHomePage: React.FC = () => {
           </a>
           
           <a
-            href="/tomato"
+            href="#/tomato"
             style={{
               display: 'inline-block',
               padding: '12px 24px',
@@ -68,9 +66,7 @@ const SimpleHomePage: React.FC = () => {
           </a>
 
           <a
-            href="/statistics"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="#/statistics"
             style={{
               display: 'inline-block',
               padding: '12px 24px',

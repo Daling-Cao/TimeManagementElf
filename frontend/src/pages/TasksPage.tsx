@@ -160,8 +160,8 @@ const TasksPage: React.FC = () => {
               </h1>
             </div>
             <nav style={{ display: 'flex', gap: '32px' }}>
-              <a href="/" style={{ color: '#6b7280', textDecoration: 'none' }}>首页</a>
-              <a href="/tasks" style={{ color: '#0284c7', fontWeight: '500', textDecoration: 'none' }}>任务列表</a>
+              <a href="#/" style={{ color: '#6b7280', textDecoration: 'none' }}>首页</a>
+              <a href="#/tasks" style={{ color: '#0284c7', fontWeight: '500', textDecoration: 'none' }}>任务列表</a>
             </nav>
           </div>
         </div>

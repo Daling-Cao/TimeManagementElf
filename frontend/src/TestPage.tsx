@@ -27,7 +27,7 @@ const TestPage: React.FC = () => {
         </ul>
         <div style={{ marginTop: '20px' }}>
           <a 
-            href="/tasks" 
+            href="#/tasks" 
             style={{ 
               display: 'inline-block',
               padding: '10px 20px',

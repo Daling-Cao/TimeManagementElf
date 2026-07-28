@@ -25,9 +25,9 @@ const HomePage: React.FC = () => {
               <h1 className="text-2xl font-bold text-primary-600">时间管理小精灵</h1>
             </div>
             <nav className="flex space-x-8">
-              <a href="/tasks">任务列表</a>
-              <a href="/tomato">番茄钟</a>
-              <a href="/settings">设置</a>
+              <a href="#/tasks">任务列表</a>
+              <a href="#/tomato">番茄钟</a>
+              <a href="#/settings">设置</a>
             </nav>
           </div>
         </div>

@@ -94,9 +94,9 @@ const TomatoPage: React.FC = () => {
               </h1>
             </div>
             <nav style={{ display: 'flex', gap: '32px' }}>
-              <a href="/" style={{ color: '#6b7280', textDecoration: 'none' }}>首页</a>
-              <a href="/tasks" style={{ color: '#6b7280', textDecoration: 'none' }}>任务列表</a>
-              <a href="/tomato" style={{ color: '#0284c7', fontWeight: '500', textDecoration: 'none' }}>番茄钟</a>
+              <a href="#/" style={{ color: '#6b7280', textDecoration: 'none' }}>首页</a>
+              <a href="#/tasks" style={{ color: '#6b7280', textDecoration: 'none' }}>任务列表</a>
+              <a href="#/tomato" style={{ color: '#0284c7', fontWeight: '500', textDecoration: 'none' }}>番茄钟</a>
             </nav>
           </div>
         </div>
@@ -168,7 +168,7 @@ const TomatoPage: React.FC = () => {
                 }}>
                   <p style={{ marginBottom: '12px' }}>暂无待办任务</p>
                   <a
-                    href="/tasks"
+                    href="#/tasks"
                     style={{
                       color: '#0284c7',
                       textDecoration: 'underline'
