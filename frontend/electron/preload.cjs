@@ -7,7 +7,7 @@ contextBridge.exposeInMainWorld('petAPI', {
   contextMenu: () => ipcRenderer.send('pet:contextmenu'),
   quit: () => ipcRenderer.send('app:quit'),
   // Main window -> pet state signals.
-  setFocus: (active) => ipcRenderer.send('pet:focus', !!active),
+  setFocus: (active, title) => ipcRenderer.send('pet:focus', !!active, title || ''),
   celebrate: () => ipcRenderer.send('pet:celebrate'),
   // Pet window subscribes to state messages forwarded by the main process.
   onState: (cb) => {

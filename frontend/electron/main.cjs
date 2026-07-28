@@ -144,7 +144,9 @@ ipcMain.on('pet:move', (_event, x, y) => {
 });
 ipcMain.on('main:toggle', toggleMainWindow);
 ipcMain.on('pet:contextmenu', showPetMenu);
-ipcMain.on('pet:focus', (_event, active) => sendPetState({ type: 'focus', active: !!active }));
+ipcMain.on('pet:focus', (_event, active, title) =>
+  sendPetState({ type: 'focus', active: !!active, title: title || '' }),
+);
 ipcMain.on('pet:celebrate', () => sendPetState({ type: 'celebrate' }));
 ipcMain.on('app:quit', () => {
   app.isQuitting = true;

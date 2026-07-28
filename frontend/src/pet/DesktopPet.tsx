@@ -16,6 +16,7 @@ const DesktopPet = () => {
   const [hovered, setHovered] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [petState, setPetState] = useState<PetVisualState>('idle');
+  const [focusTitle, setFocusTitle] = useState('');
 
   const stateRef = useRef<PetVisualState>('idle');
   const nextPlayAt = useRef(0);
@@ -58,6 +59,7 @@ const DesktopPet = () => {
       if (data.type === 'focus') {
         if (data.active) {
           window.clearTimeout(returnTimer.current);
+          setFocusTitle(data.title ?? '');
           setState('focus');
         } else if (stateRef.current === 'focus') {
           goIdle();
@@ -151,9 +153,14 @@ const DesktopPet = () => {
         onMouseLeave={() => setHovered(false)}
         title="点我打开/收起主界面 · 拖我移动 · 右键预览动作/退出"
       >
-        {(hovered || petState === 'celebrate') && !dragging && (
-          <div className="pet-bubble">{bubbleText[petState]}</div>
+        {petState === 'focus' && (
+          <div className="pet-title" title={focusTitle || '专注中'}>
+            🍅 {focusTitle || '专注中'}
+          </div>
         )}
+        {(hovered || petState === 'celebrate') &&
+          petState !== 'focus' &&
+          !dragging && <div className="pet-bubble">{bubbleText[petState]}</div>}
         <div className="pet-cat-wrap">
           <PixelCat state={petState} scale={12} />
         </div>

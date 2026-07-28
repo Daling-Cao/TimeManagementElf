@@ -1,7 +1,7 @@
 export type PetVisualState = 'idle' | 'focus' | 'celebrate' | 'play';
 
 export type PetStateMessage =
-  | { type: 'focus'; active: boolean }
+  | { type: 'focus'; active: boolean; title?: string }
   | { type: 'celebrate' }
   | { type: 'preview'; state: PetVisualState };
 
@@ -14,8 +14,8 @@ export interface PetAPI {
   contextMenu: () => void;
   /** Quit the whole application. */
   quit: () => void;
-  /** (main window) Tell the pet whether a focus timer is running. */
-  setFocus: (active: boolean) => void;
+  /** (main window) Tell the pet whether a focus timer is running (and the task title). */
+  setFocus: (active: boolean, title?: string) => void;
   /** (main window) Tell the pet a focus session just completed. */
   celebrate: () => void;
   /** (pet window) Subscribe to state messages; returns an unsubscribe fn. */

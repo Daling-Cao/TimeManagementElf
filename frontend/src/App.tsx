@@ -7,7 +7,8 @@ import StatisticsPage from './pages/StatisticsPage';
 import { useTomatoStore } from './core/store/tomatoStore';
 
 function App() {
-  const { isRunning, isPaused, timeRemaining, resume } = useTomatoStore();
+  const { isRunning, isPaused, timeRemaining, currentTask, resume } =
+    useTomatoStore();
 
   // 恢复持久化的计时器
   useEffect(() => {
@@ -21,8 +22,8 @@ function App() {
   // 把番茄钟状态同步给桌面小猫（Electron）：运行时显示"专注(猫头)"，
   // 计时归零完成时触发"完成(挥旗)"。在纯网页环境下 window.petAPI 不存在，直接跳过。
   useEffect(() => {
-    window.petAPI?.setFocus(isRunning);
-  }, [isRunning]);
+    window.petAPI?.setFocus(isRunning, currentTask?.title);
+  }, [isRunning, currentTask?.title]);
 
   const prevRemaining = useRef(timeRemaining);
   useEffect(() => {

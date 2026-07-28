@@ -90,6 +90,39 @@ body,
   animation: shadow-breathe 3.4s ease-in-out infinite;
 }
 
+.pet-title {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(15, 23, 42, 0.9);
+  color: #ffedd5;
+  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei",
+    sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  z-index: 2;
+  animation: bubble-in 0.18s ease;
+}
+.pet-title::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid rgba(15, 23, 42, 0.9);
+}
+
 .pet-bubble {
   position: absolute;
   top: 2px;
