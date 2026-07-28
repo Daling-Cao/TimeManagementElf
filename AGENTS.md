@@ -16,12 +16,19 @@ Health check: `curl http://localhost:3000/api/health`. The frontend is the prima
 
 ### Desktop app (Electron "desktop pet")
 
-The frontend can run as a desktop app whose entry point is a **desktop pet**: a transparent, frameless, always-on-top window showing a cat (`frontend/public/cat.png`) that sits on the desktop. Clicking the cat toggles the main window (the existing task/pomodoro UI); the cat can be dragged to move it, and right-click opens a menu (`打开/隐藏主界面`, `退出`).
+The frontend can run as a desktop app whose entry point is a **desktop pet**: a transparent, frameless, always-on-top window showing an animated pixel-art cat that sits on the desktop. Clicking the cat toggles the main window (the existing task/pomodoro UI); the cat can be dragged to move it, and right-click opens a menu (`打开/隐藏主界面`, `预览动作` submenu, `退出`).
 
 - Code lives in `frontend/electron/` (`main.cjs` = main process with the pet + main windows and IPC; `preload.cjs` = the `window.petAPI` bridge) and `frontend/src/pet/` (pet renderer). Entry HTML: `frontend/pet.html` (pet) and `frontend/index.html` (main app). `vite.config.ts` is multi-page (`main` + `pet`) with `base: './'`.
 - Routing MUST stay on `HashRouter` (see `src/App.tsx`) and internal links MUST use `#/...`. `BrowserRouter`/`href="/..."` renders a blank window because Electron loads pages over `file://` (and `.../index.html`), where path-based routes never match.
 - Scripts: `npm run electron:dev` (Vite dev server + Electron), `npm run electron:build` (build then run the built `dist/` over `file://`).
-- **Cloud VM run notes:** a display is available at `DISPLAY=:1`. Electron needs the sandbox disabled in this container — pass `--no-sandbox` (e.g. `DISPLAY=:1 ./node_modules/.bin/electron . --no-sandbox` after `npm run build`) or set `ELECTRON_DISABLE_SANDBOX=1`. The Electron binary is downloaded lazily on the **first** `electron` invocation (not during `npm install`), so the first run prints "Downloading Electron binary..." and takes longer. `dbus`-connection errors in the log are harmless. Dragging the transparent pet window can leave visual trails on this VM (no compositor); that artifact does not occur on real Windows/macOS.
+
+**Pixel-art states & how they're driven**
+
+- Four states: `idle` (cat sleeping/loaf, default), `focus` (a cat-head, shown while a pomodoro timer runs), `celebrate` (waving a flag, shown briefly on completion), `play` (bouncing; triggers randomly during idle, never more often than ~30 min — `PLAY_MIN_GAP_MS` in `DesktopPet.tsx`).
+- Sprites are hand-authored pixel frames in `frontend/src/pet/sprites.json` (palette + 16×16 frame grids), rendered on a `<canvas>` by `src/pet/PixelCat.tsx`; per-state motion is CSS in `src/pet/pet.css`. To edit the art, change `sprites.json` and preview without Electron via `node scripts/preview-sprites.mjs` (writes `sprite_*.png` strips to `/opt/cursor/artifacts`).
+- The main window drives `focus`/`celebrate` from the pomodoro store: `src/App.tsx` calls `window.petAPI.setFocus(isRunning)` and `window.petAPI.celebrate()` (on `timeRemaining` hitting 0). The main window uses `backgroundThrottling: false` so the timer stays accurate while hidden.
+- Set env `PET_FAST=1` to shorten the playful cooldown (~12 s) for demos; the right-click `预览动作` submenu forces any state on demand.
+- **Cloud VM run notes:** a display is available at `DISPLAY=:1`. Electron needs the sandbox disabled in this container — pass `--no-sandbox` (e.g. `DISPLAY=:1 PET_FAST=1 ./node_modules/.bin/electron . --no-sandbox` after `npm run build`) or set `ELECTRON_DISABLE_SANDBOX=1`. The Electron binary is downloaded lazily on the **first** `electron` invocation (not during `npm install`), so the first run prints "Downloading Electron binary..." and takes longer. `dbus`-connection errors in the log are harmless. Dragging the transparent pet window can leave visual trails on this VM (no compositor); that artifact does not occur on real Windows/macOS.
 
 ### Database (SQLite + Prisma) — important gotcha
 
