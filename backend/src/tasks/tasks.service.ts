@@ -136,13 +136,15 @@ export class TasksService {
     focusMinutes: number,
     actualMinutes: number,
   ) {
+    // Stats are side effects of tomato sessions — do not bump `version`.
+    // Incrementing version here caused optimistic-lock 409s when clients
+    // completed/updated a task after recording a session with a stale version.
     await this.prisma.task.update({
       where: { task_id: taskId },
       data: {
         stats_focus_minutes: { increment: focusMinutes },
         stats_actual_minutes: { increment: actualMinutes },
         stats_sessions_count: { increment: 1 },
-        version: { increment: 1 },
         updated_at: new Date(),
       },
     });
