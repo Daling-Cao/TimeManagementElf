@@ -56,6 +56,30 @@ npm run build
 npm run preview
 ```
 
+## 桌面版与 Windows 安装包
+
+桌面版以透明、置顶的像素小猫为入口。左键点击小猫可打开或隐藏主界面，拖动可移动位置，右键可切换主题、预览动作或退出。
+
+每次启动都会在 Electron 的用户数据目录下生成独立的完整运行日志，包含窗口加载、渲染器 console、IPC、宠物状态、主题切换和未捕获异常。右键小猫 → **打开运行日志** 可直接查看当前会话日志。
+
+任务和番茄钟历史统一保存在一个数据目录下。`tasks.json` 与 `history.json` 是完整数据，`days/YYYY-MM-DD/` 下保存每天的 `tasks.json` 和 `history.json`。首次运行会自动迁移浏览器存储中的现有数据；右键小猫 → **打开数据文件夹** 可直接查看或备份，使用 **选择数据文件夹…** 可以更换位置。切换时会复制现有数据但不删除旧目录，并永久记住选择结果。
+
+开发调试：
+
+```bash
+npm run electron:dev
+```
+
+在 Windows 上，从项目根目录双击 `build-windows.bat` 即可自动安装依赖并生成 x64 单文件绿色版。也可以在本目录运行：
+
+```bash
+npm run dist:win
+```
+
+绿色版输出到 `release/TimeManagementElf.exe`，无需安装，双击即可运行。应用使用单实例锁：再次启动只会唤醒现有主界面，不会创建第二个宠物或第二个应用实例。
+
+小猫支持 `idle`、`focus`、`celebrate`、`play` 四种动画状态。自定义 GIF、APNG、WebP 或 PNG 主题的方法见 [`public/themes/README.md`](public/themes/README.md)。
+
 ## 环境变量
 
 创建 `.env.local` 文件：

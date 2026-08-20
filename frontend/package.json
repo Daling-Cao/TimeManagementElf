@@ -1,7 +1,9 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "时间管理小精灵：番茄钟、任务管理与像素桌面宠物",
+  "author": "TimeManagementElf",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -12,6 +14,8 @@
     "electron": "electron .",
     "electron:dev": "concurrently -k -n vite,electron -c cyan,magenta \"vite\" \"wait-on tcp:127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "electron:build": "npm run build && electron .",
+    "icon:build": "node scripts/build-app-icon.mjs",
+    "dist:win": "npm run icon:build && npm run build && electron --version && node scripts/package-windows.mjs",
     "themes:preview": "node scripts/preview-sprites.mjs",
     "themes:gif": "node scripts/build-gif-theme.mjs"
   },
@@ -33,6 +37,7 @@
     "concurrently": "^10.0.4",
     "cross-env": "^10.1.0",
     "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^9.38.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^5.2.0",
@@ -44,5 +49,31 @@
     "typescript-eslint": "^8.45.0",
     "vite": "^7.1.7",
     "wait-on": "^9.1.0"
+  },
+  "build": {
+    "appId": "com.timemanagementelf.app",
+    "productName": "时间管理小精灵",
+    "asar": true,
+    "electronDist": "node_modules/electron/dist",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "TimeManagementElf.${ext}"
+    }
   }
 }
