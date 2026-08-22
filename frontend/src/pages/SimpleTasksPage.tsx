@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTomatoStore } from '../core/store/tomatoStore';
 import FloatingTomatoTimer from '../components/FloatingTomatoTimer';
 
@@ -25,6 +26,7 @@ interface Task {
 }
 
 const SimpleTasksPage: React.FC = () => {
+  const navigate = useNavigate();
   const { isRunning, isPaused } = useTomatoStore();
   
   // 从 localStorage 加载任务
@@ -193,22 +195,27 @@ const SimpleTasksPage: React.FC = () => {
     // 若已有番茄钟在运行或暂停，则直接聚焦到番茄钟页面，禁止开启新实例
     if (isRunning || isPaused) {
       window.focus();
-      window.location.href = '/tomato';
+      navigate('/tomato');
       return;
     }
     const task = tasks.find(t => t.id === taskId);
     if (task) {
-      // 如果任务是待办状态，改为进行中
+      // 如果任务是待办状态，改为进行中，并记录开始时间
       if (task.status === 'pending') {
-        updateTaskStatus(taskId, 'in_progress');
-        // 设置任务开始时间
         const updatedTasks = tasks.map(t =>
-          t.id === taskId ? { ...t, startedAt: t.startedAt || new Date().toISOString() } : t
+          t.id === taskId
+            ? {
+                ...t,
+                status: 'in_progress' as const,
+                startedAt: t.startedAt || new Date().toISOString(),
+              }
+            : t
         );
+        localStorage.setItem('tasks', JSON.stringify(updatedTasks));
         setTasks(updatedTasks);
       }
-      // 跳转到番茄钟页面，传递任务ID
-      window.location.href = `/tomato?taskId=${taskId}`;
+      // HashRouter 必须走 #/tomato?...，用 location.href='/tomato' 会落到首页
+      navigate(`/tomato?taskId=${taskId}`);
     }
   };
 
@@ -651,7 +658,10 @@ const SimpleTasksPage: React.FC = () => {
                   fontSize: '14px',
                   boxSizing: 'border-box'
                 }}
-                onKeyPress={(e) => e.key === 'Enter' && addTask()}
+                onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing || e.key === 'Process') return;
+                  if (e.key === 'Enter') addTask();
+                }}
               />
             </div>
 
@@ -1006,6 +1016,7 @@ const SimpleTasksPage: React.FC = () => {
                   boxSizing: 'border-box'
                 }}
                 onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing || e.key === 'Process') return;
                   if (e.key === 'Enter') submitEdit();
                   if (e.key === 'Escape') closeEditDialog();
                 }}

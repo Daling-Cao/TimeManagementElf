@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTomatoStore } from '../core/store/tomatoStore';
 
 interface Task {
@@ -15,6 +16,8 @@ interface Task {
 }
 
 const SimpleTomatoPage: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   // 使用全局状态
   const {
     timeRemaining,
@@ -44,11 +47,10 @@ const SimpleTomatoPage: React.FC = () => {
   const [isCustomType, setIsCustomType] = useState(false);
   const [customTypeInput, setCustomTypeInput] = useState('');
 
-  // 从 URL 加载任务和处理 action 参数
+  // 从 Hash 路由的查询参数加载任务和处理 action
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const taskId = params.get('taskId');
-    const action = params.get('action');
+    const taskId = searchParams.get('taskId');
+    const action = searchParams.get('action');
     
     if (taskId) {
       const tasksJson = localStorage.getItem('tasks');
@@ -68,9 +70,10 @@ const SimpleTomatoPage: React.FC = () => {
         setSessionCompleted(false);
         setShowSummaryDialog(true);
       }
+      navigate('/tomato', { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchParams]);
 
   // 请求通知权限
   useEffect(() => {
@@ -185,7 +188,7 @@ const SimpleTomatoPage: React.FC = () => {
         }
       }
       // 返回任务列表
-      window.location.href = '/tasks';
+      navigate('/tasks');
     } else {
       // 重置状态，准备下一个番茄钟
       setShowSummaryDialog(false);
@@ -193,10 +196,7 @@ const SimpleTomatoPage: React.FC = () => {
       setSessionCompleted(false);
       // 如果有关联任务，导航回任务列表以刷新显示
       if (taskToSave) {
-        // 延迟导航，确保 localStorage 已更新
-        setTimeout(() => {
-          window.location.href = '/tasks';
-        }, 100);
+        navigate('/tasks');
       }
     }
   };
@@ -716,7 +716,10 @@ const SimpleTomatoPage: React.FC = () => {
                   fontSize: '14px',
                   boxSizing: 'border-box'
                 }}
-                onKeyPress={(e) => e.key === 'Enter' && handleCreateQuickTask()}
+                onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing || e.key === 'Process') return;
+                  if (e.key === 'Enter') handleCreateQuickTask();
+                }}
               />
             </div>
 
