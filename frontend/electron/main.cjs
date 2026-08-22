@@ -155,6 +155,8 @@ function createPetWindow() {
     skipTaskbar: true,
     hasShadow: false,
     fullscreenable: false,
+    // 不抢键盘焦点，否则主窗口里任务标题输入框会打不出字
+    focusable: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
