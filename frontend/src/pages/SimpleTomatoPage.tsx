@@ -30,6 +30,7 @@ const SimpleTomatoPage: React.FC = () => {
     pause,
     resume,
     stop,
+    reset,
     setCurrentTask,
     setSelectedDuration
   } = useTomatoStore();
@@ -51,18 +52,23 @@ const SimpleTomatoPage: React.FC = () => {
   useEffect(() => {
     const taskId = searchParams.get('taskId');
     const action = searchParams.get('action');
-    
+
     if (taskId) {
-      const tasksJson = localStorage.getItem('tasks');
-      if (tasksJson) {
-        const tasks: Task[] = JSON.parse(tasksJson);
-        const task = tasks.find(t => t.id === taskId);
-        if (task) {
-          setCurrentTask(task);
+      try {
+        const tasksJson = localStorage.getItem('tasks');
+        if (tasksJson) {
+          const parsed: unknown = JSON.parse(tasksJson);
+          const tasks: Task[] = Array.isArray(parsed) ? parsed : [];
+          const task = tasks.find(t => String(t.id) === String(taskId));
+          if (task) {
+            setCurrentTask(task);
+          }
         }
+      } catch (err) {
+        console.error('读取任务列表失败:', err);
       }
     }
-    
+
     // 处理停止操作
     if (action === 'stop') {
       if (isRunning || isPaused) {
@@ -82,25 +88,25 @@ const SimpleTomatoPage: React.FC = () => {
     }
   }, []);
 
-  // 监听番茄钟完成事件
+  // 从别的页回来时，如果计时已经归零且还没写总结，补弹对话框。
+  // 从任务列表点「开始番茄钟」会先 reset()，不会误弹。
   useEffect(() => {
-    if (timeRemaining === 0 && !isRunning && sessionStartTime) {
-      // 番茄钟完成，显示总结对话框
+    const state = useTomatoStore.getState();
+    if (state.timeRemaining === 0 && !state.isRunning && !state.isPaused && state.sessionStartTime) {
       setSessionCompleted(true);
       setShowSummaryDialog(true);
     }
-  }, [timeRemaining, isRunning, sessionStartTime]);
+  }, []);
 
-  // 清除 currentTask 的逻辑：当总结对话框显示且计时器已停止时清除
+  // 本页停留期间倒计时归零
   useEffect(() => {
-    if (showSummaryDialog && !isRunning && !isPaused) {
-      // 延迟清除，确保 handleSaveSummary 能获取到 currentTask
-      const timer = setTimeout(() => {
-        setCurrentTask(null);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [showSummaryDialog, isRunning, isPaused, setCurrentTask]);
+    return useTomatoStore.subscribe((state, prev) => {
+      if (prev.timeRemaining > 0 && state.timeRemaining === 0 && !state.isRunning) {
+        setSessionCompleted(true);
+        setShowSummaryDialog(true);
+      }
+    });
+  }, []);
 
   const saveTomatoSession = (completed: boolean, summaryText: string, taskRef?: Task | null) => {
     if (!sessionStartTime) return;
@@ -127,77 +133,82 @@ const SimpleTomatoPage: React.FC = () => {
       summary: summaryText
     };
 
-    // 保存到番茄钟会话记录
-    const sessionsJson = localStorage.getItem('tomatoSessions');
-    const sessions = sessionsJson ? JSON.parse(sessionsJson) : [];
-    sessions.push(session);
-    localStorage.setItem('tomatoSessions', JSON.stringify(sessions));
+    try {
+      const sessionsJson = localStorage.getItem('tomatoSessions');
+      const sessions = sessionsJson ? JSON.parse(sessionsJson) : [];
+      if (!Array.isArray(sessions)) return;
+      sessions.push(session);
+      localStorage.setItem('tomatoSessions', JSON.stringify(sessions));
 
-    // 如果有关联任务，更新任务的总结记录
-    if (task) {
-      const tasksJson = localStorage.getItem('tasks');
-      if (tasksJson) {
-        const tasks: Task[] = JSON.parse(tasksJson);
-        const taskIndex = tasks.findIndex(t => t.id === task.id);
-        
-        if (taskIndex !== -1) {
-          const taskToUpdate = tasks[taskIndex];
-          const newSummary = {
-            id: Date.now().toString(),
-            sessionId: sessionId,
-            summary: summaryText,
-            timestamp: new Date().toISOString(),
-            duration: actualDurationMinutes, // 使用实际时长
-            completed: completed
-          };
+      if (task) {
+        const tasksJson = localStorage.getItem('tasks');
+        if (tasksJson) {
+          const parsed: unknown = JSON.parse(tasksJson);
+          const tasks: Task[] = Array.isArray(parsed) ? parsed : [];
+          const taskIndex = tasks.findIndex(t => t.id === task.id);
 
-          tasks[taskIndex] = {
-            ...taskToUpdate,
-            summaries: [...(taskToUpdate.summaries || []), newSummary],
-            totalDuration: (taskToUpdate.totalDuration || 0) + actualDurationMinutes, // 累加实际时长
-            completedSessions: (taskToUpdate.completedSessions || 0) + (completed ? 1 : 0)
-          };
+          if (taskIndex !== -1) {
+            const taskToUpdate = tasks[taskIndex];
+            const newSummary = {
+              id: Date.now().toString(),
+              sessionId: sessionId,
+              summary: summaryText,
+              timestamp: new Date().toISOString(),
+              duration: actualDurationMinutes,
+              completed: completed
+            };
 
-          localStorage.setItem('tasks', JSON.stringify(tasks));
-          // 只有在 currentTask 还存在时才更新它
-          if (currentTask && currentTask.id === task.id) {
-            setCurrentTask(tasks[taskIndex]);
+            tasks[taskIndex] = {
+              ...taskToUpdate,
+              summaries: [...(taskToUpdate.summaries || []), newSummary],
+              totalDuration: (taskToUpdate.totalDuration || 0) + actualDurationMinutes,
+              completedSessions: (taskToUpdate.completedSessions || 0) + (completed ? 1 : 0)
+            };
+
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+            if (currentTask && currentTask.id === task.id) {
+              setCurrentTask(tasks[taskIndex]);
+            }
           }
         }
       }
+    } catch (err) {
+      console.error('保存番茄钟会话失败:', err);
     }
   };
 
   const handleSaveSummary = (taskCompleted: boolean) => {
-    // 在清除 currentTask 之前保存任务引用
     const taskToSave = currentTask;
-    
+
     saveTomatoSession(sessionCompleted, summary, taskToSave);
-    
-    // 如果任务完成，更新任务状态
+
     if (taskCompleted && taskToSave) {
-      const tasksJson = localStorage.getItem('tasks');
-      if (tasksJson) {
-        const tasks: Task[] = JSON.parse(tasksJson);
-        const taskIndex = tasks.findIndex(t => t.id === taskToSave.id);
-        
-        if (taskIndex !== -1) {
-          tasks[taskIndex].status = 'completed';
-          tasks[taskIndex].completedAt = new Date().toISOString();
-          localStorage.setItem('tasks', JSON.stringify(tasks));
+      try {
+        const tasksJson = localStorage.getItem('tasks');
+        if (tasksJson) {
+          const parsed: unknown = JSON.parse(tasksJson);
+          const tasks: Task[] = Array.isArray(parsed) ? parsed : [];
+          const taskIndex = tasks.findIndex(t => t.id === taskToSave.id);
+
+          if (taskIndex !== -1) {
+            tasks[taskIndex].status = 'completed';
+            tasks[taskIndex].completedAt = new Date().toISOString();
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+          }
         }
+      } catch (err) {
+        console.error('更新任务状态失败:', err);
       }
-      // 返回任务列表
+    }
+
+    setShowSummaryDialog(false);
+    setSummary('');
+    setSessionCompleted(false);
+    reset();
+    setCurrentTask(null);
+
+    if (taskToSave) {
       navigate('/tasks');
-    } else {
-      // 重置状态，准备下一个番茄钟
-      setShowSummaryDialog(false);
-      setSummary('');
-      setSessionCompleted(false);
-      // 如果有关联任务，导航回任务列表以刷新显示
-      if (taskToSave) {
-        navigate('/tasks');
-      }
     }
   };
 

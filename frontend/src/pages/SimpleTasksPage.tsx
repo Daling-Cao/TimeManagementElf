@@ -27,13 +27,18 @@ interface Task {
 
 const SimpleTasksPage: React.FC = () => {
   const navigate = useNavigate();
-  const { isRunning, isPaused } = useTomatoStore();
+  const { isRunning } = useTomatoStore();
   
   // 从 localStorage 加载任务
   const [tasks, setTasks] = useState<Task[]>(() => {
     const saved = localStorage.getItem('tasks');
     if (saved) {
-      return JSON.parse(saved);
+      try {
+        const parsed: unknown = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (err) {
+        console.error('加载任务失败:', err);
+      }
     }
     return [
       {
@@ -192,31 +197,38 @@ const SimpleTasksPage: React.FC = () => {
   };
 
   const startTomato = (taskId: string) => {
+    const tomato = useTomatoStore.getState();
     // 若已有番茄钟在运行或暂停，则直接聚焦到番茄钟页面，禁止开启新实例
-    if (isRunning || isPaused) {
+    if (tomato.isRunning || tomato.isPaused) {
       window.focus();
       navigate('/tomato');
       return;
     }
     const task = tasks.find(t => t.id === taskId);
-    if (task) {
-      // 如果任务是待办状态，改为进行中，并记录开始时间
-      if (task.status === 'pending') {
-        const updatedTasks = tasks.map(t =>
-          t.id === taskId
-            ? {
-                ...t,
-                status: 'in_progress' as const,
-                startedAt: t.startedAt || new Date().toISOString(),
-              }
-            : t
-        );
-        localStorage.setItem('tasks', JSON.stringify(updatedTasks));
-        setTasks(updatedTasks);
-      }
-      // HashRouter 必须走 #/tomato?...，用 location.href='/tomato' 会落到首页
-      navigate(`/tomato?taskId=${taskId}`);
+    if (!task) return;
+
+    let nextTask = task;
+    // 如果任务是待办状态，改为进行中，并记录开始时间
+    if (task.status === 'pending') {
+      const updatedTasks = tasks.map(t =>
+        t.id === taskId
+          ? {
+              ...t,
+              status: 'in_progress' as const,
+              startedAt: t.startedAt || new Date().toISOString(),
+            }
+          : t
+      );
+      localStorage.setItem('tasks', JSON.stringify(updatedTasks));
+      setTasks(updatedTasks);
+      nextTask = updatedTasks.find(t => t.id === taskId) || task;
     }
+
+    // 清掉上次结束后残留的 00:00 / 总结状态，否则新任务进番茄钟页会像空白/卡住
+    tomato.reset();
+    tomato.setCurrentTask(nextTask);
+    // HashRouter 必须走 #/tomato?...，用 location.href='/tomato' 会落到首页
+    navigate({ pathname: '/tomato', search: `?taskId=${encodeURIComponent(taskId)}` });
   };
 
   const viewTaskDetail = (task: Task) => {
