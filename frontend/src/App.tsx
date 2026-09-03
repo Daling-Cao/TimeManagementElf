@@ -57,6 +57,7 @@ function App() {
           <Route path="/tasks" element={<SimpleTasksPage />} />
           <Route path="/tomato" element={<SimpleTomatoPage />} />
           <Route path="/statistics" element={<StatisticsPage />} />
+          <Route path="*" element={<SimpleHomePage />} />
         </Routes>
       </div>
     </Router>

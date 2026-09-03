@@ -132,7 +132,7 @@ export const useTomatoStore = create<TomatoState>()(
       set({
         isRunning: false,
         isPaused: false,
-        sessionStartTime: null
+        // 保留 sessionStartTime，总结对话框还要用实际时长
       });
       document.title = '🍅 番茄钟';
     },
