@@ -11,6 +11,8 @@ coverage/
 # Production
 dist/
 build/
+release/
+release-*/
 *.tsbuildinfo
 
 # Environment variables

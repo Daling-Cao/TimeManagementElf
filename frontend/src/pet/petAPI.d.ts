@@ -30,9 +30,26 @@ export interface PetAPI {
   onState: (cb: (data: PetStateMessage) => void) => () => void;
 }
 
+export interface DesktopDataAPI {
+  load: () => Promise<{
+    tasks: unknown[] | null;
+    history: unknown[] | null;
+    dataRoot: string;
+  }>;
+  saveTasks: (tasks: unknown[]) => Promise<{ date: string; taskCount: number }>;
+  saveHistory: (
+    history: unknown[],
+  ) => Promise<{ historyCount: number; dayCount: number }>;
+  getRoot: () => Promise<string>;
+  onRootChanged: (
+    cb: (payload: { dataRoot: string }) => void,
+  ) => () => void;
+}
+
 declare global {
   interface Window {
     petAPI?: PetAPI;
+    dataAPI?: DesktopDataAPI;
   }
 }
 
