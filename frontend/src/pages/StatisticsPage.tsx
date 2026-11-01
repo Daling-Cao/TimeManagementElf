@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTomatoStore } from '../core/store/tomatoStore';
 import FloatingTomatoTimer from '../components/FloatingTomatoTimer';
+import { readStoredList } from '../core/services/storedList';
 
 interface TaskStats {
   total: number;
@@ -73,8 +74,78 @@ interface TypeAccumulator {
   duration: number;
 }
 
+// StatCard / ProgressBar 放在组件外：定义在组件内部时每次渲染都是新组件类型，
+// React 会把整块卡片卸载再重建（进度条动画也随之重播）。
+const StatCard: React.FC<{
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  color: string;
+  icon: string;
+}> = ({ title, value, subtitle, color, icon }) => (
+  <div style={{
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    padding: '24px',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+    borderLeft: `4px solid ${color}`
+  }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>
+          {title}
+        </div>
+        <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#111827', marginBottom: '4px' }}>
+          {value}
+        </div>
+        {subtitle && (
+          <div style={{ fontSize: '12px', color: '#9ca3af' }}>
+            {subtitle}
+          </div>
+        )}
+      </div>
+      <div style={{ fontSize: '32px' }}>{icon}</div>
+    </div>
+  </div>
+);
+
+const ProgressBar: React.FC<{
+  label: string;
+  value: number;
+  max: number;
+  color: string;
+}> = ({ label, value, max, color }) => {
+  const percentage = max > 0 ? (value / max) * 100 : 0;
+
+  return (
+    <div style={{ marginBottom: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+        <span style={{ fontSize: '14px', color: '#374151' }}>{label}</span>
+        <span style={{ fontSize: '14px', fontWeight: '600', color: '#111827' }}>
+          {value} / {max}
+        </span>
+      </div>
+      <div style={{
+        width: '100%',
+        height: '8px',
+        backgroundColor: '#e5e7eb',
+        borderRadius: '4px',
+        overflow: 'hidden'
+      }}>
+        <div style={{
+          width: `${percentage}%`,
+          height: '100%',
+          backgroundColor: color,
+          transition: 'width 0.3s ease'
+        }} />
+      </div>
+    </div>
+  );
+};
+
 const StatisticsPage: React.FC = () => {
-  const { isRunning } = useTomatoStore();
+  // 只订阅 isRunning，避免整页随倒计时每秒重绘
+  const isRunning = useTomatoStore((s) => s.isRunning);
   
   const [taskStats, setTaskStats] = useState<TaskStats>({
     total: 0,
@@ -113,8 +184,7 @@ const StatisticsPage: React.FC = () => {
 
   const loadStatistics = () => {
     // 从 localStorage 加载任务数据
-    const tasksJson = localStorage.getItem('tasks');
-    const allTasks = tasksJson ? JSON.parse(tasksJson) : [];
+    const allTasks = readStoredList<StoredTask>('tasks');
 
     // 根据选择的时间段过滤任务
     const now = new Date();
@@ -170,8 +240,7 @@ const StatisticsPage: React.FC = () => {
     setPriorityStats({ high, medium, low });
 
     // 从 localStorage 加载番茄钟数据
-    const tomatoSessionsJson = localStorage.getItem('tomatoSessions');
-    const tomatoSessions = tomatoSessionsJson ? JSON.parse(tomatoSessionsJson) : [];
+    const tomatoSessions = readStoredList<StoredSession>('tomatoSessions');
 
     const todaySessions = tomatoSessions.filter((s: StoredSession) => 
       new Date(s.startTime || 0) >= todayStart
@@ -197,8 +266,8 @@ const StatisticsPage: React.FC = () => {
 
     // 计算按任务名称统计
     const taskDetails: TaskDetailStats[] = tasks.map((task: StoredTask) => ({
-      name: task.title,
-      status: task.status,
+      name: task.title || '未命名任务',
+      status: task.status || 'pending',
       sessions: task.completedSessions || 0,
       duration: task.totalDuration || 0,
       summaries: task.summaries?.length || 0,
@@ -229,39 +298,6 @@ const StatisticsPage: React.FC = () => {
     }));
     setTypeStats(typeStatsArray);
   };
-
-  const StatCard: React.FC<{
-    title: string;
-    value: string | number;
-    subtitle?: string;
-    color: string;
-    icon: string;
-  }> = ({ title, value, subtitle, color, icon }) => (
-    <div style={{
-      backgroundColor: 'white',
-      borderRadius: '12px',
-      padding: '24px',
-      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-      borderLeft: `4px solid ${color}`
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>
-            {title}
-          </div>
-          <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#111827', marginBottom: '4px' }}>
-            {value}
-          </div>
-          {subtitle && (
-            <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-              {subtitle}
-            </div>
-          )}
-        </div>
-        <div style={{ fontSize: '32px' }}>{icon}</div>
-      </div>
-    </div>
-  );
 
   const formatDuration = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
@@ -305,9 +341,8 @@ const StatisticsPage: React.FC = () => {
 
   // 加载历史任务（今天之前完成的任务）
   const loadHistoryTasks = () => {
-    const tasksJson = localStorage.getItem('tasks');
-    const allTasks = tasksJson ? JSON.parse(tasksJson) : [];
-    
+    const allTasks = readStoredList<StoredTask>('tasks');
+
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     
@@ -331,40 +366,6 @@ const StatisticsPage: React.FC = () => {
       case 'low': return '#10b981';
       default: return '#6b7280';
     }
-  };
-
-  const ProgressBar: React.FC<{
-    label: string;
-    value: number;
-    max: number;
-    color: string;
-  }> = ({ label, value, max, color }) => {
-    const percentage = max > 0 ? (value / max) * 100 : 0;
-    
-    return (
-      <div style={{ marginBottom: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <span style={{ fontSize: '14px', color: '#374151' }}>{label}</span>
-          <span style={{ fontSize: '14px', fontWeight: '600', color: '#111827' }}>
-            {value} / {max}
-          </span>
-        </div>
-        <div style={{
-          width: '100%',
-          height: '8px',
-          backgroundColor: '#e5e7eb',
-          borderRadius: '4px',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            width: `${percentage}%`,
-            height: '100%',
-            backgroundColor: color,
-            transition: 'width 0.3s ease'
-          }} />
-        </div>
-      </div>
-    );
   };
 
   return (

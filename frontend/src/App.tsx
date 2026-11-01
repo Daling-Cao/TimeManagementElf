@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import PageErrorBoundary from './components/PageErrorBoundary';
 import SimpleHomePage from './pages/SimpleHomePage';
 import SimpleTasksPage from './pages/SimpleTasksPage';
 import SimpleTomatoPage from './pages/SimpleTomatoPage';
@@ -52,15 +53,26 @@ function App() {
   return (
     <Router>
       <div className="App">
-        <Routes>
-          <Route path="/" element={<SimpleHomePage />} />
-          <Route path="/tasks" element={<SimpleTasksPage />} />
-          <Route path="/tomato" element={<SimpleTomatoPage />} />
-          <Route path="/statistics" element={<StatisticsPage />} />
-          <Route path="*" element={<SimpleHomePage />} />
-        </Routes>
+        <AppRoutes />
       </div>
     </Router>
+  );
+}
+
+function AppRoutes() {
+  const location = useLocation();
+
+  // key 跟随路由：某页出错后切到别的页会重新挂载，不会一直停在错误页
+  return (
+    <PageErrorBoundary key={location.pathname}>
+      <Routes>
+        <Route path="/" element={<SimpleHomePage />} />
+        <Route path="/tasks" element={<SimpleTasksPage />} />
+        <Route path="/tomato" element={<SimpleTomatoPage />} />
+        <Route path="/statistics" element={<StatisticsPage />} />
+        <Route path="*" element={<SimpleHomePage />} />
+      </Routes>
+    </PageErrorBoundary>
   );
 }
 

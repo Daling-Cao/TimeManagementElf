@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTomatoStore } from '../core/store/tomatoStore';
 import FloatingTomatoTimer from '../components/FloatingTomatoTimer';
+import { parseStoredList } from '../core/services/storedList';
+import { confirmDialog } from '../core/services/dialogs';
 
 interface TomatoSummary {
   id: string;
@@ -27,19 +29,13 @@ interface Task {
 
 const SimpleTasksPage: React.FC = () => {
   const navigate = useNavigate();
-  const { isRunning } = useTomatoStore();
-  
+  // 只订阅 isRunning：解构整个 store 会让整页（含全部任务）每秒随倒计时重绘，切页和输入都会卡
+  const isRunning = useTomatoStore((s) => s.isRunning);
+
   // 从 localStorage 加载任务
   const [tasks, setTasks] = useState<Task[]>(() => {
-    const saved = localStorage.getItem('tasks');
-    if (saved) {
-      try {
-        const parsed: unknown = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      } catch (err) {
-        console.error('加载任务失败:', err);
-      }
-    }
+    const saved = parseStoredList<Task>(localStorage.getItem('tasks'));
+    if (saved) return saved;
     return [
       {
         id: '1',
@@ -132,26 +128,14 @@ const SimpleTasksPage: React.FC = () => {
   // 监听页面焦点和 localStorage 变化，重新加载任务
   useEffect(() => {
     const handleFocus = () => {
-      const saved = localStorage.getItem('tasks');
-      if (saved) {
-        try {
-          const loadedTasks = JSON.parse(saved);
-          setTasks(loadedTasks);
-        } catch (err) {
-          console.error('加载任务失败:', err);
-        }
-      }
+      const loadedTasks = parseStoredList<Task>(localStorage.getItem('tasks'));
+      if (loadedTasks) setTasks(loadedTasks);
     };
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'tasks' && e.newValue) {
-        try {
-          const loadedTasks = JSON.parse(e.newValue);
-          setTasks(loadedTasks);
-        } catch (err) {
-          console.error('加载任务失败:', err);
-        }
-      }
+      if (e.key !== 'tasks') return;
+      const loadedTasks = parseStoredList<Task>(e.newValue);
+      if (loadedTasks) setTasks(loadedTasks);
     };
 
     // 页面获得焦点时重新加载
@@ -354,7 +338,7 @@ const SimpleTasksPage: React.FC = () => {
 
   const deleteTask = (id: string) => {
     const task = tasks.find(t => t.id === id);
-    if (task && window.confirm(`确定要删除任务「${task.title}」吗？\n\n此操作不可恢复。`)) {
+    if (task && confirmDialog(`确定要删除任务「${task.title}」吗？\n\n此操作不可恢复。`)) {
       setTasks(tasks.filter(task => task.id !== id));
     }
   };

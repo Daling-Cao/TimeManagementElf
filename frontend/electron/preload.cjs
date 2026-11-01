@@ -41,6 +41,14 @@ contextBridge.exposeInMainWorld('petAPI', {
   },
 });
 
+// 替代 window.confirm / alert：Windows 上 Electron 原生弹窗关闭后，页面输入框经常拿不到焦点，
+// 表现为总结、新建任务等输入框"有时打不了字"。改由主进程弹框并在关闭后把焦点还给页面。
+// 用同步 IPC，调用方可以像 confirm() 一样直接拿到布尔值。
+contextBridge.exposeInMainWorld('dialogAPI', {
+  confirm: (message) => ipcRenderer.sendSync('dialog:confirm', String(message)),
+  alert: (message) => ipcRenderer.sendSync('dialog:alert', String(message)),
+});
+
 contextBridge.exposeInMainWorld('dataAPI', {
   load: () => ipcRenderer.invoke('data:load'),
   saveTasks: (tasks) => ipcRenderer.invoke('data:save-tasks', tasks),

@@ -41,7 +41,22 @@ function loadRoute(win, htmlFile) {
   }
 }
 
-function monitorWindow(win, name) {
+function monitorWindow(win, name, htmlFile) {
+  // 自动恢复：30 秒内最多尝试 3 次，避免开发服务器没起来时无限重载。
+  let recoveries = 0;
+  let lastRecoveryAt = 0;
+  const recover = (reason) => {
+    if (!htmlFile || win.isDestroyed()) return;
+    if (Date.now() - lastRecoveryAt > 30_000) recoveries = 0;
+    if (recoveries >= 3) return;
+    recoveries += 1;
+    lastRecoveryAt = Date.now();
+    log.warn(name, reason, { htmlFile, attempt: recoveries });
+    setTimeout(() => {
+      if (!win.isDestroyed()) loadRoute(win, htmlFile);
+    }, 500);
+  };
+
   log.info(name, 'Window created', {
     id: win.id,
     bounds: win.getBounds(),
@@ -65,17 +80,23 @@ function monitorWindow(win, name) {
   );
   win.webContents.on(
     'did-fail-load',
-    (_event, errorCode, errorDescription, validatedURL, isMainFrame) =>
+    (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       log.error(name, 'Renderer failed to load', {
         errorCode,
         errorDescription,
         validatedURL,
         isMainFrame,
-      }),
+      });
+      // 主框架加载失败（例如误跳到 file:///C:/tomato）会留下白屏，回到入口页。
+      // -3 (ERR_ABORTED) 只是被新的导航打断，不需要处理。
+      if (isMainFrame && errorCode !== -3) recover('Recovering from failed load');
+    },
   );
-  win.webContents.on('render-process-gone', (_event, details) =>
-    log.error(name, 'Renderer process exited', details),
-  );
+  win.webContents.on('render-process-gone', (_event, details) => {
+    log.error(name, 'Renderer process exited', details);
+    // 渲染进程崩溃后窗口会一直白屏，自动重新加载入口页恢复。
+    if (details.reason !== 'clean-exit') recover('Reloading renderer after crash');
+  });
   win.webContents.on('console-message', (event) => {
       const details = {
         level: event.level,
@@ -112,7 +133,7 @@ function createMainWindow() {
     },
   });
 
-  monitorWindow(mainWindow, 'main-window');
+  monitorWindow(mainWindow, 'main-window', 'index.html');
 
   loadRoute(mainWindow, 'index.html');
 
@@ -302,6 +323,36 @@ ipcMain.on('pet:move', (_event, x, y) => {
   if (petWindow) petWindow.setPosition(Math.round(x), Math.round(y));
 });
 ipcMain.on('main:toggle', toggleMainWindow);
+
+// 主进程弹框代替渲染进程的 window.confirm/alert（后者关闭后输入框常常无法再获得焦点）。
+function showDialogFor(event, options) {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const response = win
+    ? dialog.showMessageBoxSync(win, { title: '时间管理小精灵', ...options })
+    : dialog.showMessageBoxSync({ title: '时间管理小精灵', ...options });
+  if (win && !win.isDestroyed()) {
+    win.focus();
+    win.webContents.focus();
+  }
+  return response;
+}
+
+ipcMain.on('dialog:confirm', (event, message) => {
+  const response = showDialogFor(event, {
+    type: 'question',
+    message,
+    buttons: ['确定', '取消'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+  });
+  event.returnValue = response === 0;
+});
+
+ipcMain.on('dialog:alert', (event, message) => {
+  showDialogFor(event, { type: 'info', message, buttons: ['确定'], noLink: true });
+  event.returnValue = null;
+});
 ipcMain.on('pet:contextmenu', showPetMenu);
 ipcMain.on('pet:themes', (_event, payload) => {
   petThemes = (payload && payload.themes) || [];
