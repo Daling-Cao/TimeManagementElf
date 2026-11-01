@@ -46,10 +46,18 @@ export interface DesktopDataAPI {
   ) => () => void;
 }
 
+export interface DialogAPI {
+  /** Main-process confirm box; returns true when the user clicks 确定. */
+  confirm: (message: string) => boolean;
+  /** Main-process info box. */
+  alert: (message: string) => void;
+}
+
 declare global {
   interface Window {
     petAPI?: PetAPI;
     dataAPI?: DesktopDataAPI;
+    dialogAPI?: DialogAPI;
   }
 }
 

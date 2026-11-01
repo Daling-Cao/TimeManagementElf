@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTomatoStore } from '../core/store/tomatoStore';
+import { readStoredList } from '../core/services/storedList';
+import { alertDialog, confirmDialog } from '../core/services/dialogs';
 
 interface Task {
   id: string;
@@ -54,18 +56,9 @@ const SimpleTomatoPage: React.FC = () => {
     const action = searchParams.get('action');
 
     if (taskId) {
-      try {
-        const tasksJson = localStorage.getItem('tasks');
-        if (tasksJson) {
-          const parsed: unknown = JSON.parse(tasksJson);
-          const tasks: Task[] = Array.isArray(parsed) ? parsed : [];
-          const task = tasks.find(t => String(t.id) === String(taskId));
-          if (task) {
-            setCurrentTask(task);
-          }
-        }
-      } catch (err) {
-        console.error('读取任务列表失败:', err);
+      const task = readStoredList<Task>('tasks').find(t => String(t.id) === String(taskId));
+      if (task) {
+        setCurrentTask(task);
       }
     }
 
@@ -88,12 +81,12 @@ const SimpleTomatoPage: React.FC = () => {
     }
   }, []);
 
-  // 从别的页回来时，如果计时已经归零且还没写总结，补弹对话框。
-  // 从任务列表点「开始番茄钟」会先 reset()，不会误弹。
+  // 从别的页回来时，如果上一个番茄钟已结束（归零或手动停止）但还没写总结，补弹对话框。
+  // stop() 会保留 sessionStartTime，写完总结或「开始番茄钟」都会 reset() 清掉，不会误弹。
   useEffect(() => {
     const state = useTomatoStore.getState();
-    if (state.timeRemaining === 0 && !state.isRunning && !state.isPaused && state.sessionStartTime) {
-      setSessionCompleted(true);
+    if (!state.isRunning && !state.isPaused && state.sessionStartTime) {
+      setSessionCompleted(state.timeRemaining === 0);
       setShowSummaryDialog(true);
     }
   }, []);
@@ -134,41 +127,35 @@ const SimpleTomatoPage: React.FC = () => {
     };
 
     try {
-      const sessionsJson = localStorage.getItem('tomatoSessions');
-      const sessions = sessionsJson ? JSON.parse(sessionsJson) : [];
-      if (!Array.isArray(sessions)) return;
+      const sessions = readStoredList<unknown>('tomatoSessions');
       sessions.push(session);
       localStorage.setItem('tomatoSessions', JSON.stringify(sessions));
 
       if (task) {
-        const tasksJson = localStorage.getItem('tasks');
-        if (tasksJson) {
-          const parsed: unknown = JSON.parse(tasksJson);
-          const tasks: Task[] = Array.isArray(parsed) ? parsed : [];
-          const taskIndex = tasks.findIndex(t => t.id === task.id);
+        const tasks = readStoredList<Task>('tasks');
+        const taskIndex = tasks.findIndex(t => t.id === task.id);
 
-          if (taskIndex !== -1) {
-            const taskToUpdate = tasks[taskIndex];
-            const newSummary = {
-              id: Date.now().toString(),
-              sessionId: sessionId,
-              summary: summaryText,
-              timestamp: new Date().toISOString(),
-              duration: actualDurationMinutes,
-              completed: completed
-            };
+        if (taskIndex !== -1) {
+          const taskToUpdate = tasks[taskIndex];
+          const newSummary = {
+            id: Date.now().toString(),
+            sessionId: sessionId,
+            summary: summaryText,
+            timestamp: new Date().toISOString(),
+            duration: actualDurationMinutes,
+            completed: completed
+          };
 
-            tasks[taskIndex] = {
-              ...taskToUpdate,
-              summaries: [...(taskToUpdate.summaries || []), newSummary],
-              totalDuration: (taskToUpdate.totalDuration || 0) + actualDurationMinutes,
-              completedSessions: (taskToUpdate.completedSessions || 0) + (completed ? 1 : 0)
-            };
+          tasks[taskIndex] = {
+            ...taskToUpdate,
+            summaries: [...(taskToUpdate.summaries || []), newSummary],
+            totalDuration: (taskToUpdate.totalDuration || 0) + actualDurationMinutes,
+            completedSessions: (taskToUpdate.completedSessions || 0) + (completed ? 1 : 0)
+          };
 
-            localStorage.setItem('tasks', JSON.stringify(tasks));
-            if (currentTask && currentTask.id === task.id) {
-              setCurrentTask(tasks[taskIndex]);
-            }
+          localStorage.setItem('tasks', JSON.stringify(tasks));
+          if (currentTask && currentTask.id === task.id) {
+            setCurrentTask(tasks[taskIndex]);
           }
         }
       }
@@ -184,17 +171,13 @@ const SimpleTomatoPage: React.FC = () => {
 
     if (taskCompleted && taskToSave) {
       try {
-        const tasksJson = localStorage.getItem('tasks');
-        if (tasksJson) {
-          const parsed: unknown = JSON.parse(tasksJson);
-          const tasks: Task[] = Array.isArray(parsed) ? parsed : [];
-          const taskIndex = tasks.findIndex(t => t.id === taskToSave.id);
+        const tasks = readStoredList<Task>('tasks');
+        const taskIndex = tasks.findIndex(t => t.id === taskToSave.id);
 
-          if (taskIndex !== -1) {
-            tasks[taskIndex].status = 'completed';
-            tasks[taskIndex].completedAt = new Date().toISOString();
-            localStorage.setItem('tasks', JSON.stringify(tasks));
-          }
+        if (taskIndex !== -1) {
+          tasks[taskIndex].status = 'completed';
+          tasks[taskIndex].completedAt = new Date().toISOString();
+          localStorage.setItem('tasks', JSON.stringify(tasks));
         }
       } catch (err) {
         console.error('更新任务状态失败:', err);
@@ -221,7 +204,7 @@ const SimpleTomatoPage: React.FC = () => {
   const handleStart = () => {
     // 双重检查：确保不会在已有计时时启动新的
     if (isRunning || isPaused) {
-      alert('已有番茄钟正在运行或暂停中，请先完成当前番茄钟。');
+      alertDialog('已有番茄钟正在运行或暂停中，请先完成当前番茄钟。');
       return;
     }
     
@@ -247,7 +230,7 @@ const SimpleTomatoPage: React.FC = () => {
 
   const handleCreateQuickTask = () => {
     if (!quickTaskTitle.trim()) {
-      alert('请输入任务标题');
+      alertDialog('请输入任务标题');
       return;
     }
 
@@ -267,8 +250,7 @@ const SimpleTomatoPage: React.FC = () => {
     };
 
     // 保存到 localStorage
-    const tasksJson = localStorage.getItem('tasks');
-    const tasks: Task[] = tasksJson ? JSON.parse(tasksJson) : [];
+    const tasks = readStoredList<Task>('tasks');
     tasks.push(newTask);
     localStorage.setItem('tasks', JSON.stringify(tasks));
 
@@ -294,7 +276,7 @@ const SimpleTomatoPage: React.FC = () => {
   };
 
   const handleStop = () => {
-    if (window.confirm('确定要停止吗？')) {
+    if (confirmDialog('确定要停止吗？')) {
       stop();
       setSessionCompleted(false);
       setShowSummaryDialog(true);
