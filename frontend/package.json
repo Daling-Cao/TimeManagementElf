@@ -55,6 +55,11 @@
     "productName": "时间管理小精灵",
     "asar": true,
     "electronDist": "node_modules/electron/dist",
+    "electronLanguages": [
+      "zh-CN",
+      "zh-TW",
+      "en-US"
+    ],
     "directories": {
       "output": "release"
     },
