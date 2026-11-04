@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PetView from './PetView';
 import {
   DEFAULT_THEME_ID,
-  THEMES,
+  allThemes,
   getTheme,
   loadThemeId,
   saveThemeId,
 } from './theme';
-import type { PetVisualState } from './petAPI';
+import type { CustomPetTheme, PetVisualState } from './petAPI';
 
 const DRAG_THRESHOLD = 4; // px of movement before it counts as a drag
 
@@ -25,7 +25,13 @@ const DesktopPet = () => {
   const [petState, setPetState] = useState<PetVisualState>('idle');
   const [focusTitle, setFocusTitle] = useState('');
   const [themeId, setThemeId] = useState<string>(() => loadThemeId());
-  const theme = getTheme(themeId);
+  // 用户上传的主题由主进程保存；null = 还没读到（先别把保存的选择当成无效）。
+  const [customThemes, setCustomThemes] = useState<CustomPetTheme[] | null>(
+    window.petThemesAPI ? null : [],
+  );
+  const [brokenUrls, setBrokenUrls] = useState<ReadonlySet<string>>(() => new Set());
+  const themes = useMemo(() => allThemes(customThemes ?? []), [customThemes]);
+  const theme = getTheme(themeId, themes);
 
   const stateRef = useRef<PetVisualState>('idle');
   const nextPlayAt = useRef(0);
@@ -36,13 +42,40 @@ const DesktopPet = () => {
     setPetState(next);
   }, []);
 
+  const reloadCustomThemes = useCallback(() => {
+    window.petThemesAPI
+      ?.list()
+      .then((list) => {
+        setCustomThemes(list);
+        setBrokenUrls(new Set());
+      })
+      .catch(() => setCustomThemes([]));
+  }, []);
+
+  useEffect(() => {
+    reloadCustomThemes();
+  }, [reloadCustomThemes]);
+
+  // 保存的主题被删掉了（或不存在）：回到默认主题。
+  useEffect(() => {
+    if (customThemes === null) return;
+    if (!themes.some((t) => t.id === themeId)) {
+      setThemeId(DEFAULT_THEME_ID);
+      saveThemeId(DEFAULT_THEME_ID);
+    }
+  }, [customThemes, themes, themeId]);
+
   // Keep the main-process context menu's theme list + selection in sync.
   useEffect(() => {
+    if (customThemes === null) return;
     window.petAPI?.reportThemes({
-      themes: THEMES.map((t) => ({ id: t.id, name: t.name })),
-      selectedId: themeId,
+      themes: themes.map((t) => ({
+        id: t.id,
+        name: t.kind === 'custom' ? `🎨 ${t.name}` : t.name,
+      })),
+      selectedId: getTheme(themeId, themes).id,
     });
-  }, [themeId]);
+  }, [themes, themeId, customThemes]);
 
   // ---- state machine / scheduler ------------------------------------------
   useEffect(() => {
@@ -84,6 +117,8 @@ const DesktopPet = () => {
       } else if (data.type === 'theme') {
         setThemeId(data.id);
         saveThemeId(data.id);
+      } else if (data.type === 'themes-changed') {
+        reloadCustomThemes();
       } else if (data.type === 'celebrate') {
         enterTransient('celebrate', CELEBRATE_DURATION_MS);
       } else if (data.type === 'preview') {
@@ -103,7 +138,7 @@ const DesktopPet = () => {
       window.clearTimeout(returnTimer.current);
       off?.();
     };
-  }, [setState]);
+  }, [setState, reloadCustomThemes]);
 
   // ---- drag + click --------------------------------------------------------
   const grab = useRef({
@@ -186,7 +221,13 @@ const DesktopPet = () => {
             theme={theme}
             state={petState}
             scale={12}
-            onImageError={() => {
+            brokenUrls={brokenUrls}
+            onImageError={(url) => {
+              if (theme.kind === 'custom') {
+                // 上传的某个文件坏了：只有这个状态改用内置小猫。
+                setBrokenUrls((prev) => new Set(prev).add(url));
+                return;
+              }
               // A broken/missing theme asset falls back to the built-in cat.
               setThemeId(DEFAULT_THEME_ID);
               saveThemeId(DEFAULT_THEME_ID);

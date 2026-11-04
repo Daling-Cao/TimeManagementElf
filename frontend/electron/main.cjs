@@ -7,12 +7,18 @@ const {
   shell,
   dialog,
   powerMonitor,
+  protocol,
+  net,
 } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const log = require('./logger.cjs');
 const dataStore = require('./data-store.cjs');
 const ai = require('./ai.cjs');
+const petThemesStore = require('./pet-themes.cjs');
+
+// 自定义主题文件通过 elf-theme:// 协议加载，协议必须在 ready 之前注册。
+petThemesStore.registerScheme(protocol);
 
 // In dev we load the Vite dev server (VITE_DEV_SERVER_URL is set by the
 // `electron:dev` script); otherwise we load the built files from dist/.
@@ -358,6 +364,7 @@ function showPetMenu() {
             }))
           : [{ label: '（加载中…）', enabled: false }],
     },
+    { label: '🎨 自定义动画…', click: () => openPage('/pet-themes') },
     {
       label: '预览动作',
       submenu: [
@@ -496,6 +503,52 @@ ipcMain.on('pet:themes', (_event, payload) => {
     themes: petThemes,
   });
 });
+// ---------- 自定义动画主题 ----------
+function notifyThemesChanged() {
+  sendPetState({ type: 'themes-changed' });
+}
+
+function themeCall(action, fn) {
+  try {
+    const result = fn();
+    if (action !== 'list') notifyThemesChanged();
+    return { ok: true, result };
+  } catch (error) {
+    log.error('pet-themes', `Theme ${action} failed`, error);
+    return { ok: false, error: error.message || String(error) };
+  }
+}
+
+ipcMain.handle('pet-themes:list', () => petThemesStore.list());
+ipcMain.handle('pet-themes:selected', () => petSelectedTheme);
+ipcMain.handle('pet-themes:create', (_event, input) =>
+  themeCall('create', () => petThemesStore.create(input || {})),
+);
+ipcMain.handle('pet-themes:update', (_event, id, patch) =>
+  themeCall('update', () => petThemesStore.update(id, patch || {})),
+);
+ipcMain.handle('pet-themes:set-file', (_event, id, state, data) =>
+  themeCall('set-file', () => petThemesStore.setStateFile(id, state, data)),
+);
+ipcMain.handle('pet-themes:clear-file', (_event, id, state) =>
+  themeCall('clear-file', () => petThemesStore.clearStateFile(id, state)),
+);
+ipcMain.handle('pet-themes:remove', (_event, id) =>
+  themeCall('remove', () => petThemesStore.remove(id)),
+);
+ipcMain.on('pet-themes:select', (_event, id) => {
+  petSelectedTheme = String(id || '');
+  sendPetState({ type: 'theme', id: petSelectedTheme });
+});
+ipcMain.on('pet-themes:preview', (_event, state) => {
+  if (['idle', 'focus', 'celebrate', 'play'].includes(state)) {
+    sendPetState({ type: 'preview', state });
+  }
+});
+ipcMain.on('pet-themes:open-folder', () => {
+  shell.openPath(petThemesStore.getRoot());
+});
+
 ipcMain.on('pet:focus', (_event, active, title) => {
   log.info('timer', 'Focus state received', { active: !!active, title: title || '' });
   sendPetState({ type: 'focus', active: !!active, title: title || '' });
@@ -556,6 +609,7 @@ if (!hasSingleInstanceLock) {
     log.init(app);
     dataStore.init(app);
     ai.init(app);
+    petThemesStore.init(app, protocol, net);
     settingsFile = path.join(app.getPath('userData'), 'app-settings.json');
     log.info('app', 'Electron app ready with single-instance lock', {
       autostart: process.argv.includes('--autostart'),
