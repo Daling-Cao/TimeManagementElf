@@ -1,4 +1,5 @@
 import React from 'react';
+import { openDailyPlanner } from '../core/dailyPlan';
 
 const SimpleHomePage: React.FC = () => {
   return (
@@ -79,6 +80,22 @@ const SimpleHomePage: React.FC = () => {
           >
             📊 统计
           </a>
+
+          <button
+            onClick={openDailyPlanner}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: '#f59e0b',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontWeight: '500',
+              fontSize: '16px',
+              cursor: 'pointer'
+            }}
+          >
+            📅 规划今天
+          </button>
         </div>
 
         <div style={{
