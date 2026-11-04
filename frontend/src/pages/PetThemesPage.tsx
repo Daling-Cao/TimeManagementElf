@@ -1,17 +1,30 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import PixelCat from '../pet/PixelCat';
+import PetBehaviorEditor from '../components/PetBehaviorEditor';
 import {
+  DEFAULT_SIZE,
   DEFAULT_THEME_ID,
-  PET_STATES,
-  STATE_LABELS,
+  MAX_SIZE,
+  MIN_SIZE,
+  MOTION_LABELS,
   THEMES,
   fromCustom,
   getTheme,
+  isStandardState,
   resolveStateSource,
+  stateMotion,
+  themeStates,
 } from '../pet/theme';
-import type { CustomPetTheme, PetThemeResult, PetVisualState } from '../pet/petAPI';
+import type {
+  CustomPetTheme,
+  CustomPetThemePatch,
+  PetMotion,
+  PetStateId,
+  PetThemeResult,
+} from '../pet/petAPI';
 
 const MAX_BYTES = 20 * 1024 * 1024;
+const MAX_CUSTOM_STATES = 20;
 const ACCEPT = 'image/gif,image/png,image/apng,image/webp,image/jpeg,.gif,.png,.apng,.webp,.jpg,.jpeg';
 
 const card: React.CSSProperties = {
@@ -31,6 +44,21 @@ const button = (variant: 'primary' | 'plain' | 'danger' = 'plain'): React.CSSPro
   color: variant === 'primary' ? 'white' : variant === 'danger' ? '#b91c1c' : '#374151',
 });
 
+const fieldInput: React.CSSProperties = {
+  padding: '5px 8px',
+  border: '1px solid #d1d5db',
+  borderRadius: '6px',
+  fontSize: '13px',
+};
+
+const label: React.CSSProperties = {
+  fontSize: '13px',
+  color: '#374151',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+};
+
 // 透明图片的棋盘格背景
 const checkerboard: React.CSSProperties = {
   backgroundColor: '#fff',
@@ -44,29 +72,77 @@ function confirmBox(message: string): boolean {
   return window.dialogAPI ? window.dialogAPI.confirm(message) : window.confirm(message);
 }
 
+/** 滑块：拖动时只改本地值，松手 / 失焦时才保存。 */
+const SizeSlider: React.FC<{
+  value: number;
+  disabled?: boolean;
+  onCommit: (value: number) => void;
+}> = ({ value, disabled, onCommit }) => {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const commit = () => {
+    if (draft !== value) onCommit(draft);
+  };
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+      <input
+        type="range"
+        min={MIN_SIZE}
+        max={MAX_SIZE}
+        step={10}
+        value={draft}
+        disabled={disabled}
+        onChange={(e) => setDraft(Number(e.target.value))}
+        onPointerUp={commit}
+        onKeyUp={commit}
+        onBlur={commit}
+        style={{ width: '110px' }}
+      />
+      <span style={{ fontSize: '12px', color: '#6b7280', width: '44px' }}>{draft}px</span>
+    </span>
+  );
+};
+
 interface StateCardProps {
   theme: CustomPetTheme;
-  state: PetVisualState;
+  state: { id: PetStateId; name: string; custom: boolean };
   isActive: boolean;
   busy: boolean;
-  onUpload: (state: PetVisualState, file: File) => void;
-  onClear: (state: PetVisualState) => void;
+  onUpload: (state: PetStateId, file: File) => void;
+  onClear: (state: PetStateId) => void;
+  onPatch: (patch: CustomPetThemePatch, ok?: string) => void;
+  onRename: (state: PetStateId, name: string) => void;
+  onDelete: (state: PetStateId) => void;
 }
 
-const StateCard: React.FC<StateCardProps> = ({ theme, state, isActive, busy, onUpload, onClear }) => {
+const StateCard: React.FC<StateCardProps> = ({
+  theme,
+  state,
+  isActive,
+  busy,
+  onUpload,
+  onClear,
+  onPatch,
+  onRename,
+  onDelete,
+}) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
-  const uploaded = !!theme.files[state];
-  const source = resolveStateSource(fromCustom(theme), state);
-  const baseName = getTheme(theme.base).name;
+  const [nameDraft, setNameDraft] = useState(state.name);
+  useEffect(() => setNameDraft(state.name), [state.name]);
+
+  const uploaded = !!theme.files[state.id];
+  const view = fromCustom(theme);
+  const source = resolveStateSource(view, state.id);
+  const ownSize = theme.sizes[state.id];
+  const motion = stateMotion(view, state.id);
+  const fallbackText = isStandardState(state.id)
+    ? `沿用「${getTheme(theme.base).name}」`
+    : '还没上传，暂时显示闲置动画';
 
   return (
     <div
-      style={{
-        ...card,
-        padding: '12px',
-        outline: dragOver ? '2px dashed #0284c7' : 'none',
-      }}
+      style={{ ...card, padding: '12px', outline: dragOver ? '2px dashed #0284c7' : 'none' }}
       onDragOver={(e) => {
         e.preventDefault();
         setDragOver(true);
@@ -76,11 +152,35 @@ const StateCard: React.FC<StateCardProps> = ({ theme, state, isActive, busy, onU
         e.preventDefault();
         setDragOver(false);
         const file = e.dataTransfer.files[0];
-        if (file && !busy) onUpload(state, file);
+        if (file && !busy) onUpload(state.id, file);
       }}
     >
-      <div style={{ fontWeight: 600, fontSize: '14px', color: '#111827', marginBottom: '8px' }}>
-        {STATE_LABELS[state]}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+        {state.custom ? (
+          <input
+            value={nameDraft}
+            maxLength={20}
+            onChange={(e) => setNameDraft(e.target.value)}
+            onBlur={() => nameDraft.trim() !== state.name && onRename(state.id, nameDraft)}
+            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+            style={{ ...fieldInput, flex: 1, fontWeight: 600, minWidth: 0 }}
+            title="状态名称"
+          />
+        ) : (
+          <span style={{ fontWeight: 600, fontSize: '14px', color: '#111827', flex: 1 }}>
+            {state.name}
+          </span>
+        )}
+        {state.custom && (
+          <button
+            style={{ ...button('danger'), padding: '4px 8px', fontSize: '12px' }}
+            disabled={busy}
+            onClick={() => onDelete(state.id)}
+            title="删除这个状态"
+          >
+            删除
+          </button>
+        )}
       </div>
       <div
         style={{
@@ -98,12 +198,12 @@ const StateCard: React.FC<StateCardProps> = ({ theme, state, isActive, busy, onU
         onClick={() => !busy && inputRef.current?.click()}
       >
         {source.kind === 'builtin' ? (
-          <PixelCat state={state} scale={8} />
+          <PixelCat state={source.state} scale={8} />
         ) : (
           <img
             key={source.url}
             src={source.url}
-            alt={state}
+            alt={state.name}
             draggable={false}
             style={{
               width: '140px',
@@ -115,22 +215,64 @@ const StateCard: React.FC<StateCardProps> = ({ theme, state, isActive, busy, onU
         )}
       </div>
       <div style={{ fontSize: '12px', color: uploaded ? '#059669' : '#6b7280', margin: '8px 0' }}>
-        {uploaded ? '✔ 已使用你上传的动画' : `沿用「${baseName}」`}
+        {uploaded ? '✔ 已使用你上传的动画' : fallbackText}
       </div>
+
+      <div style={{ ...label, fontSize: '12px', marginBottom: '6px' }}>
+        <input
+          type="checkbox"
+          checked={ownSize !== undefined}
+          disabled={busy}
+          onChange={(e) => {
+            const sizes = { ...theme.sizes };
+            if (e.target.checked) sizes[state.id] = theme.size;
+            else delete sizes[state.id];
+            onPatch({ sizes });
+          }}
+        />
+        单独大小
+        {ownSize !== undefined ? (
+          <SizeSlider
+            value={ownSize}
+            disabled={busy}
+            onCommit={(v) => onPatch({ sizes: { ...theme.sizes, [state.id]: v } })}
+          />
+        ) : (
+          <span style={{ color: '#9ca3af' }}>（用默认 {theme.size}px）</span>
+        )}
+      </div>
+      <div style={{ ...label, fontSize: '12px', marginBottom: '8px' }}>
+        附加动作
+        <select
+          value={motion}
+          disabled={busy}
+          onChange={(e) =>
+            onPatch({ motions: { ...theme.motions, [state.id]: e.target.value as PetMotion } })
+          }
+          style={{ ...fieldInput, fontSize: '12px', padding: '3px 6px' }}
+        >
+          {(Object.keys(MOTION_LABELS) as PetMotion[]).map((m) => (
+            <option key={m} value={m}>
+              {MOTION_LABELS[m]}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
         <button style={button('primary')} disabled={busy} onClick={() => inputRef.current?.click()}>
           {uploaded ? '替换' : '上传'}
         </button>
         {uploaded && (
-          <button style={button()} disabled={busy} onClick={() => onClear(state)}>
-            恢复默认
+          <button style={button()} disabled={busy} onClick={() => onClear(state.id)}>
+            {isStandardState(state.id) ? '恢复默认' : '移除动画'}
           </button>
         )}
         <button
           style={{ ...button(), opacity: isActive ? 1 : 0.5 }}
           disabled={!isActive}
           title={isActive ? '让桌面小猫播放这个动作' : '先把这个主题设为桌面小猫'}
-          onClick={() => window.petThemesAPI?.preview(state)}
+          onClick={() => window.petThemesAPI?.preview(state.id)}
         >
           桌面预览
         </button>
@@ -143,7 +285,7 @@ const StateCard: React.FC<StateCardProps> = ({ theme, state, isActive, busy, onU
         onChange={(e) => {
           const file = e.target.files?.[0];
           e.target.value = '';
-          if (file) onUpload(state, file);
+          if (file) onUpload(state.id, file);
         }}
       />
     </div>
@@ -158,6 +300,7 @@ const PetThemesPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
   const [nameDraft, setNameDraft] = useState('');
+  const [newStateName, setNewStateName] = useState('');
 
   const editing = customs.find((t) => t.id === editingId) ?? null;
 
@@ -232,23 +375,50 @@ const PetThemesPage: React.FC = () => {
     if (created) setEditingId(created.id);
   };
 
-  const upload = (state: PetVisualState, file: File) => {
+  const patch = (p: CustomPetThemePatch, ok?: string) => {
+    if (!editing) return;
+    const id = editing.id;
+    return run(() => api.update(id, p), ok);
+  };
+
+  const upload = (state: PetStateId, file: File) => {
     if (!editing) return;
     if (file.size > MAX_BYTES) {
       setMessage({ text: '文件太大（最大 20 MB）', error: true });
       return;
     }
     const id = editing.id;
+    const name = themeStates(fromCustom(editing)).find((s) => s.id === state)?.name ?? state;
     run(async () => {
       const data = new Uint8Array(await file.arrayBuffer());
       return api.setStateFile(id, state, data);
-    }, `「${STATE_LABELS[state]}」已更新`);
+    }, `「${name}」已更新`);
   };
 
   const saveName = () => {
     if (!editing || nameDraft.trim() === editing.name) return;
-    const id = editing.id;
-    run(() => api.update(id, { name: nameDraft }));
+    patch({ name: nameDraft });
+  };
+
+  const addState = () => {
+    if (!editing) return;
+    const name = newStateName.trim() || `状态${editing.customStates.length + 1}`;
+    patch({ customStates: [...editing.customStates, { name }] }, `已添加状态「${name}」，记得上传它的动画`);
+    setNewStateName('');
+  };
+
+  const renameState = (stateId: PetStateId, name: string) => {
+    if (!editing) return;
+    patch({
+      customStates: editing.customStates.map((s) => (s.id === stateId ? { ...s, name } : s)),
+    });
+  };
+
+  const deleteState = (stateId: PetStateId) => {
+    if (!editing) return;
+    const target = editing.customStates.find((s) => s.id === stateId);
+    if (!target || !confirmBox(`删除状态「${target.name}」和它上传的动画？用到它的规则也会被移除。`)) return;
+    patch({ customStates: editing.customStates.filter((s) => s.id !== stateId) }, '状态已删除');
   };
 
   const activate = (id: string) => {
@@ -291,12 +461,14 @@ const PetThemesPage: React.FC = () => {
     </div>
   );
 
+  const states = editing ? themeStates(fromCustom(editing)) : [];
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb' }}>
       <header style={{ backgroundColor: 'white', borderBottom: '1px solid #e5e7eb' }}>
         <div
           style={{
-            maxWidth: '72rem',
+            maxWidth: '76rem',
             margin: '0 auto',
             padding: '0 16px',
             height: '64px',
@@ -316,7 +488,7 @@ const PetThemesPage: React.FC = () => {
 
       <main
         style={{
-          maxWidth: '72rem',
+          maxWidth: '76rem',
           margin: '0 auto',
           padding: '24px 16px',
           display: 'grid',
@@ -349,7 +521,12 @@ const PetThemesPage: React.FC = () => {
             </div>
           )}
           {customs.map((t) =>
-            listItem(t.id, t.name, `${Object.keys(t.files).length}/4`, () => setEditingId(t.id)),
+            listItem(
+              t.id,
+              t.name,
+              `${Object.keys(t.files).length}/${4 + t.customStates.length}`,
+              () => setEditingId(t.id),
+            ),
           )}
           <div style={{ borderTop: '1px solid #f3f4f6', marginTop: '12px', paddingTop: '12px' }}>
             <button style={button()} onClick={() => api.openFolder()}>
@@ -377,13 +554,14 @@ const PetThemesPage: React.FC = () => {
 
           {!editing ? (
             <div style={{ ...card, padding: '32px', color: '#6b7280', fontSize: '14px', lineHeight: 1.8 }}>
-              <p style={{ marginTop: 0 }}>在这里可以给桌面小猫的每个动作换上自己的动画：</p>
+              <p style={{ marginTop: 0 }}>在这里可以完全定制桌面小猫：</p>
               <ol style={{ paddingLeft: '20px' }}>
                 <li>在左边选一个内置主题，点「以此为基础新建」；</li>
-                <li>为「闲置 / 专注 / 完成 / 调皮」分别上传 GIF（或 APNG / WebP / PNG），没上传的动作沿用基础主题；</li>
+                <li>为每个状态上传 GIF（或 APNG / WebP / PNG），调整显示大小和附加动作，还可以添加新的状态；</li>
+                <li>在「什么时候显示什么」里设置闲置、专注、暂停、休息、完成时用哪个状态，以及随机动作和按时间段切换；</li>
                 <li>点「设为桌面小猫」，右键小猫的「主题」菜单里也能随时切换。</li>
               </ol>
-              <p style={{ marginBottom: 0 }}>建议使用透明背景、接近正方形的图片，桌面上显示约 190×190。</p>
+              <p style={{ marginBottom: 0 }}>建议使用透明背景、接近正方形的图片。内置主题不能直接修改，新建一份即可。</p>
             </div>
           ) : (
             <>
@@ -398,7 +576,7 @@ const PetThemesPage: React.FC = () => {
                   alignItems: 'center',
                 }}
               >
-                <label style={{ fontSize: '13px', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <label style={label}>
                   名称
                   <input
                     value={nameDraft}
@@ -406,20 +584,16 @@ const PetThemesPage: React.FC = () => {
                     onChange={(e) => setNameDraft(e.target.value)}
                     onBlur={saveName}
                     onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-                    style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', width: '180px' }}
+                    style={{ ...fieldInput, fontSize: '14px', width: '160px' }}
                   />
                 </label>
-                <label style={{ fontSize: '13px', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <label style={label}>
                   没上传的动作沿用
                   <select
                     value={editing.base}
                     disabled={busy}
-                    onChange={(e) => {
-                      const id = editing.id;
-                      const base = e.target.value;
-                      run(() => api.update(id, { base }));
-                    }}
-                    style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
+                    onChange={(e) => patch({ base: e.target.value })}
+                    style={fieldInput}
                   >
                     {THEMES.map((t) => (
                       <option key={t.id} value={t.id}>
@@ -428,16 +602,20 @@ const PetThemesPage: React.FC = () => {
                     ))}
                   </select>
                 </label>
-                <label style={{ fontSize: '13px', color: '#374151', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={label}>
+                  默认大小
+                  <SizeSlider
+                    value={editing.size ?? DEFAULT_SIZE}
+                    disabled={busy}
+                    onCommit={(size) => patch({ size })}
+                  />
+                </span>
+                <label style={{ ...label, gap: '6px' }}>
                   <input
                     type="checkbox"
                     checked={editing.pixelated}
                     disabled={busy}
-                    onChange={(e) => {
-                      const id = editing.id;
-                      const pixelated = e.target.checked;
-                      run(() => api.update(id, { pixelated }));
-                    }}
+                    onChange={(e) => patch({ pixelated: e.target.checked })}
                   />
                   像素风（放大不模糊）
                 </label>
@@ -454,16 +632,17 @@ const PetThemesPage: React.FC = () => {
                 </button>
               </div>
 
+              <h2 style={{ fontSize: '16px', color: '#111827', margin: '8px 0 12px' }}>状态与动画</h2>
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
                   gap: '16px',
                 }}
               >
-                {PET_STATES.map((state) => (
+                {states.map((state) => (
                   <StateCard
-                    key={state}
+                    key={state.id}
                     theme={editing}
                     state={state}
                     isActive={editing.id === activeId}
@@ -471,14 +650,58 @@ const PetThemesPage: React.FC = () => {
                     onUpload={upload}
                     onClear={(s) => {
                       const id = editing.id;
-                      run(() => api.clearStateFile(id, s), `「${STATE_LABELS[s]}」已恢复默认`);
+                      run(() => api.clearStateFile(id, s), '已移除上传的动画');
                     }}
+                    onPatch={patch}
+                    onRename={renameState}
+                    onDelete={deleteState}
                   />
                 ))}
+                {editing.customStates.length < MAX_CUSTOM_STATES && (
+                  <div
+                    style={{
+                      ...card,
+                      padding: '16px',
+                      borderStyle: 'dashed',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      gap: '10px',
+                      minHeight: '200px',
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: '14px', color: '#111827' }}>＋ 新增状态</div>
+                    <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                      比如「伸懒腰」「喝水」「打瞌睡」，然后在下面的规则里决定什么时候出现。
+                    </div>
+                    <input
+                      value={newStateName}
+                      maxLength={20}
+                      placeholder="状态名称"
+                      onChange={(e) => setNewStateName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addState()}
+                      style={fieldInput}
+                    />
+                    <button style={button('primary')} disabled={busy} onClick={addState}>
+                      添加
+                    </button>
+                  </div>
+                )}
               </div>
               <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '12px' }}>
                 支持 GIF / APNG / 动图 WebP（自动循环播放），也可以用静态 PNG / JPG；单个文件最大 20 MB。可以直接把图片拖到格子上。
               </p>
+
+              <h2 style={{ fontSize: '16px', color: '#111827', margin: '24px 0 12px' }}>什么时候显示什么</h2>
+              <div style={{ ...card, padding: '8px 16px 16px' }}>
+                <PetBehaviorEditor
+                  key={`${editing.id}:${JSON.stringify(editing.behavior)}`}
+                  behavior={editing.behavior}
+                  states={states}
+                  busy={busy}
+                  onSave={(behavior) => patch({ behavior }, '行为设置已保存')}
+                />
+              </div>
             </>
           )}
         </section>

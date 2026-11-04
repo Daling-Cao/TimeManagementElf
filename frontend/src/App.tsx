@@ -8,12 +8,15 @@ import SimpleTomatoPage from './pages/SimpleTomatoPage';
 import StatisticsPage from './pages/StatisticsPage';
 import PetThemesPage from './pages/PetThemesPage';
 import { useTomatoStore } from './core/store/tomatoStore';
+import { useBreakStore } from './core/store/breakStore';
 
 function App() {
   // 不要订阅 timeRemaining：每秒倒计时会重绘整棵路由树，
   // 正在输入的中文 IME 组字会被打断（表现为任务标题无法输入）。
   const isRunning = useTomatoStore((s) => s.isRunning);
   const currentTaskTitle = useTomatoStore((s) => s.currentTask?.title);
+  const isPaused = useTomatoStore((s) => s.isPaused);
+  const onBreak = useBreakStore((s) => s.endsAt !== null);
 
   // 恢复持久化的计时器
   useEffect(() => {
@@ -28,6 +31,11 @@ function App() {
   useEffect(() => {
     window.petAPI?.setFocus(isRunning, currentTaskTitle);
   }, [isRunning, currentTaskTitle]);
+
+  // 暂停 / 休息也告诉小猫，主题可以为这两种时候设置单独的状态。
+  useEffect(() => {
+    window.petAPI?.setActivity(isRunning && isPaused, onBreak);
+  }, [isRunning, isPaused, onBreak]);
 
   // 计时归零完成时触发"完成(挥旗)"，用 subscribe 避免整树每秒重绘。
   useEffect(() => {

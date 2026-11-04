@@ -36,6 +36,8 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock();
 // Theme list reported by the pet renderer (for the context menu).
 let petThemes = [];
 let petSelectedTheme = '';
+// 当前主题的全部状态（含用户新增的），用于「预览动作」菜单。
+let petStates = [];
 
 // ---------- 应用设置（userData/app-settings.json） ----------
 let settingsFile = '';
@@ -377,12 +379,18 @@ function showPetMenu() {
     { label: '🎨 自定义动画…', click: () => openPage('/pet-themes') },
     {
       label: '预览动作',
-      submenu: [
-        { label: '😴 闲置 · 睡觉', click: () => sendPetState({ type: 'preview', state: 'idle' }) },
-        { label: '🐱 定时 · 猫头', click: () => sendPetState({ type: 'preview', state: 'focus' }) },
-        { label: '🚩 完成 · 挥旗', click: () => sendPetState({ type: 'preview', state: 'celebrate' }) },
-        { label: '✨ 调皮 · 蹦跳', click: () => sendPetState({ type: 'preview', state: 'play' }) },
-      ],
+      submenu: (petStates.length > 0
+        ? petStates
+        : [
+            { id: 'idle', name: '😴 闲置 · 睡觉' },
+            { id: 'focus', name: '🐱 专注 · 猫头' },
+            { id: 'celebrate', name: '🚩 完成 · 挥旗' },
+            { id: 'play', name: '✨ 调皮 · 蹦跳' },
+          ]
+      ).map((s) => ({
+        label: s.name,
+        click: () => sendPetState({ type: 'preview', state: s.id }),
+      })),
     },
     { type: 'separator' },
     {
@@ -508,6 +516,7 @@ ipcMain.on('pet:contextmenu', showPetMenu);
 ipcMain.on('pet:themes', (_event, payload) => {
   petThemes = (payload && payload.themes) || [];
   setSelectedTheme((payload && payload.selectedId) || '');
+  petStates = Array.isArray(payload && payload.states) ? payload.states.slice(0, 40) : [];
   log.info('themes', 'Pet themes reported', {
     selectedId: petSelectedTheme,
     themes: petThemes,
@@ -562,6 +571,29 @@ ipcMain.on('pet-themes:open-folder', () => {
 ipcMain.on('pet:focus', (_event, active, title) => {
   log.info('timer', 'Focus state received', { active: !!active, title: title || '' });
   sendPetState({ type: 'focus', active: !!active, title: title || '' });
+});
+ipcMain.on('pet:activity', (_event, paused, onBreak) => {
+  log.info('timer', 'Activity received', { paused: !!paused, onBreak: !!onBreak });
+  sendPetState({ type: 'activity', paused: !!paused, onBreak: !!onBreak });
+});
+// 小猫窗口跟着主题大小缩放：保持底部中点不动，并留在屏幕工作区内。
+ipcMain.on('pet:resize', (_event, width, height) => {
+  if (!petWindow || petWindow.isDestroyed()) return;
+  const w = Math.round(Math.min(600, Math.max(120, Number(width) || 240)));
+  const h = Math.round(Math.min(600, Math.max(120, Number(height) || 240)));
+  const old = petWindow.getBounds();
+  if (old.width === w && old.height === h) return;
+  const area = screen.getDisplayMatching(old).workArea;
+  const x = Math.min(
+    Math.max(area.x, Math.round(old.x + (old.width - w) / 2)),
+    area.x + area.width - w,
+  );
+  const y = Math.min(Math.max(area.y, old.y + old.height - h), area.y + area.height - h);
+  // resizable:false 时部分平台会忽略 setBounds 的尺寸，临时放开再关上。
+  petWindow.setResizable(true);
+  petWindow.setBounds({ x, y, width: w, height: h });
+  petWindow.setResizable(false);
+  log.info('pet-window', 'Resized for theme', { width: w, height: h });
 });
 ipcMain.on('pet:celebrate', () => {
   log.info('timer', 'Completion celebration received');
