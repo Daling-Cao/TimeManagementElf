@@ -1,0 +1,113 @@
+name: Release (Windows)
+
+# Builds the Windows desktop app (NSIS installer + portable exe).
+#  - Push a tag like `v1.2.0`  -> build and create a GitHub Release with both exes.
+#    The tag version must equal `version` in frontend/package.json.
+#  - Manual run (workflow_dispatch) -> build only; exes are uploaded as a workflow artifact.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+concurrency:
+  group: release-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write # needed to create the GitHub Release
+
+jobs:
+  build:
+    name: Build Windows installer
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: frontend
+        shell: bash
+    env:
+      # (package-windows.mjs passes `--publish never`; the Release is created by the
+      # softprops/action-gh-release step below with the built-in GITHUB_TOKEN.)
+      # --- Code signing (not enabled yet) -------------------------------------
+      # Unsigned exes trigger a Windows SmartScreen warning. To sign later:
+      #   1. Export the code-signing certificate as .pfx and base64-encode it:
+      #        base64 -w0 cert.pfx > cert.txt   (PowerShell: [Convert]::ToBase64String([IO.File]::ReadAllBytes('cert.pfx')))
+      #   2. Add repository secrets CSC_LINK (the base64 string) and
+      #      CSC_KEY_PASSWORD (the .pfx password).
+      #   3. Uncomment the two lines below; electron-builder signs automatically
+      #      when these env vars are present.
+      # CSC_LINK: ${{ secrets.CSC_LINK }}
+      # CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      # Without a certificate, make sure electron-builder does not try to find one.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Check tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error title=Version mismatch::Tag ${GITHUB_REF_NAME} (${tag}) does not match frontend/package.json version ${pkg}. Bump \"version\" in frontend/package.json to ${tag}, commit, and re-tag."
+            exit 1
+          fi
+          echo "Version ${pkg} OK"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Same steps as `npm run dist:win`: icon, renderer build, make sure the
+      # Electron binary is downloaded (electronDist = node_modules/electron/dist),
+      # then electron-builder via scripts/package-windows.mjs.
+      - name: Build app icon
+        run: npm run icon:build
+      - name: Build renderer
+        run: npm run build
+      - name: Ensure Electron binary
+        run: npx electron --version
+      - name: Package (NSIS + portable)
+        run: node scripts/package-windows.mjs
+
+      - name: Collect artifacts
+        id: files
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          ls -la release
+          test -f "release/TimeManagementElf-Setup-${version}.exe"
+          test -f "release/TimeManagementElf.exe"
+
+      - name: Upload workflow artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: TimeManagementElf-windows-${{ steps.files.outputs.version }}
+          path: |
+            frontend/release/TimeManagementElf-Setup-${{ steps.files.outputs.version }}.exe
+            frontend/release/TimeManagementElf.exe
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 时间管理小精灵 ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            ### 下载
+            - **TimeManagementElf-Setup-${{ steps.files.outputs.version }}.exe**：安装版（可选择安装目录，创建桌面和开始菜单快捷方式）
+            - **TimeManagementElf.exe**：便携版，双击即用，无需安装
+
+            > 安装包暂未进行代码签名，首次运行时 Windows SmartScreen 可能提示“已保护你的电脑”，点击“更多信息” → “仍要运行”即可。
+          files: |
+            frontend/release/TimeManagementElf-Setup-${{ steps.files.outputs.version }}.exe
+            frontend/release/TimeManagementElf.exe
