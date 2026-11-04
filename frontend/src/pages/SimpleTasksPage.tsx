@@ -6,6 +6,7 @@ import { parseStoredList } from '../core/services/storedList';
 import { confirmDialog } from '../core/services/dialogs';
 import TaskSummaryPanel from '../components/TaskSummaryPanel';
 import type { TaskAiSummary } from '../core/ai';
+import { openDailyPlanner } from '../core/dailyPlan';
 
 interface TomatoSummary {
   id: string;
@@ -384,10 +385,13 @@ const SimpleTasksPage: React.FC = () => {
               时间管理小精灵
             </h1>
             <nav style={{ display: 'flex', gap: '32px' }}>
-              <a href="#/" style={{ color: '#4b5563', textDecoration: 'none' }}>首页</a>
               <a href="#/tasks" style={{ color: '#0284c7', fontWeight: '500', textDecoration: 'none' }}>任务列表</a>
               <a href="#/tomato" style={{ color: '#6b7280', textDecoration: 'none' }}>番茄钟</a>
               <a href="#/statistics" style={{ color: '#6b7280', textDecoration: 'none' }}>统计</a>
+              {/* 桌面版从小猫右键菜单打开规划；网页版没有小猫，保留这个入口 */}
+              {!window.petAPI && (
+                <a href="#" onClick={(e) => { e.preventDefault(); openDailyPlanner(); }} style={{ color: '#6b7280', textDecoration: 'none' }}>📅 规划今天</a>
+              )}
             </nav>
           </div>
         </div>

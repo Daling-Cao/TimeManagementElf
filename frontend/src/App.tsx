@@ -1,9 +1,8 @@
 import { useEffect } from 'react';
-import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import PageErrorBoundary from './components/PageErrorBoundary';
 import DailyPlanner from './components/DailyPlanner';
 import BreakOverlay from './components/BreakOverlay';
-import SimpleHomePage from './pages/SimpleHomePage';
 import SimpleTasksPage from './pages/SimpleTasksPage';
 import SimpleTomatoPage from './pages/SimpleTomatoPage';
 import StatisticsPage from './pages/StatisticsPage';
@@ -66,16 +65,20 @@ function App() {
 
 function AppRoutes() {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // 小猫右键菜单（任务列表 / 番茄钟 / 统计）让主窗口跳到对应页面
+  useEffect(() => window.appAPI?.onNavigate((route) => navigate(route)), [navigate]);
 
   // key 跟随路由：某页出错后切到别的页会重新挂载，不会一直停在错误页
   return (
     <PageErrorBoundary key={location.pathname}>
       <Routes>
-        <Route path="/" element={<SimpleHomePage />} />
+        <Route path="/" element={<Navigate to="/tasks" replace />} />
         <Route path="/tasks" element={<SimpleTasksPage />} />
         <Route path="/tomato" element={<SimpleTomatoPage />} />
         <Route path="/statistics" element={<StatisticsPage />} />
-        <Route path="*" element={<SimpleHomePage />} />
+        <Route path="*" element={<Navigate to="/tasks" replace />} />
       </Routes>
     </PageErrorBoundary>
   );

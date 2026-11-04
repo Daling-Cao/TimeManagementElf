@@ -56,6 +56,12 @@ export interface DialogAPI {
 export interface AppAPI {
   /** Show and focus the main window (e.g. for the daily planner or break end). */
   showMain: () => void;
+  /** Hide the main window (e.g. after a planner that popped up on its own is closed). */
+  hideMain: () => void;
+  /** Whether the main window is currently visible (sync). */
+  isMainVisible: () => boolean;
+  /** Pet context menu asks the main window to show a page (HashRouter path). */
+  onNavigate: (cb: (route: string) => void) => () => void;
   /** Main process hints that a new day may have started (resume / unlock / tick). */
   onPlanCheck: (cb: (payload: { reason?: string }) => void) => () => void;
   /** Main process asks to open the daily planner (pet menu "规划今天"). */

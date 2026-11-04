@@ -98,8 +98,18 @@ function requestPlanCheck(reason) {
   mainWindow.webContents.send('plan:check', { reason });
 }
 
-function openPlanner() {
+// 右键菜单打开某个页面：显示主窗口并让页面跳到对应路由（HashRouter）。
+function openPage(route) {
+  log.info('main-window', 'Open page requested', { route });
   showMainWindow();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('app:navigate', route);
+  }
+}
+
+// 不在这里显示主窗口：页面要先判断窗口原本是否隐藏（决定规划弹窗是否单独显示、
+// 关闭后是否收起），再自己调用 appAPI.showMain()。
+function openPlanner() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('plan:open');
   }
@@ -214,6 +224,8 @@ function createMainWindow() {
     show: false,
     title: '时间管理小精灵',
     backgroundColor: '#f9fafb',
+    // 不显示 File/Edit/View 菜单栏（按 Alt 仍可临时呼出）
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -326,8 +338,10 @@ function sendPetState(state) {
 function showPetMenu() {
   log.info('pet-menu', 'Opening context menu');
   const template = [
-    { label: '打开 / 隐藏主界面', click: toggleMainWindow },
     { label: '📅 规划今天', click: openPlanner },
+    { label: '📋 任务列表', click: () => openPage('/tasks') },
+    { label: '🍅 番茄钟', click: () => openPage('/tomato') },
+    { label: '📊 统计', click: () => openPage('/statistics') },
     { type: 'separator' },
     {
       label: '主题',
@@ -437,6 +451,12 @@ ipcMain.on('pet:move', (_event, x, y) => {
 });
 ipcMain.on('main:toggle', toggleMainWindow);
 ipcMain.on('main:show', showMainWindow);
+ipcMain.on('main:hide', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+});
+ipcMain.on('main:is-visible', (event) => {
+  event.returnValue = !!(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible());
+});
 
 // 主进程弹框代替渲染进程的 window.confirm/alert（后者关闭后输入框常常无法再获得焦点）。
 function showDialogFor(event, options) {
