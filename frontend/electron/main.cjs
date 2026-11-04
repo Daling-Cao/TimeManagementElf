@@ -107,8 +107,9 @@ function openPage(route) {
   }
 }
 
+// 不在这里显示主窗口：页面要先判断窗口原本是否隐藏（决定规划弹窗是否单独显示、
+// 关闭后是否收起），再自己调用 appAPI.showMain()。
 function openPlanner() {
-  showMainWindow();
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('plan:open');
   }
