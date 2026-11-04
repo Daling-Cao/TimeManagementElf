@@ -407,6 +407,7 @@ function showPetMenu() {
     { label: '🔍 搜索任务', click: openSearch },
     { label: '📋 任务列表', click: () => openPage('/tasks') },
     { label: '🍅 番茄钟', click: () => openPage('/tomato') },
+    { label: '🗓️ 日历', click: () => openPage('/calendar') },
     { label: '📊 统计', click: () => openPage('/statistics') },
     { type: 'separator' },
     {

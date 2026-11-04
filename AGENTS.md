@@ -16,7 +16,7 @@ Health check: `curl http://localhost:3000/api/health`. The frontend is the prima
 
 ### Desktop app (Electron "desktop pet")
 
-The frontend can run as a desktop app whose entry point is a **desktop pet**: a transparent, frameless, always-on-top window showing an animated pixel-art cat that sits on the desktop. Clicking the cat toggles the main window (the existing task/pomodoro UI); the cat can be dragged to move it, and right-click opens a menu (`📅 规划今天`, `🔍 搜索任务`, `📋 任务列表`, `🍅 番茄钟`, `📊 统计` — each shows the main window on that route via `app:navigate` / `appAPI.onNavigate` — plus `主题`, `预览动作`, `退出`). There is no home page: `#/` redirects to `#/tasks`, and the main window starts hidden with its menu bar auto-hidden.
+The frontend can run as a desktop app whose entry point is a **desktop pet**: a transparent, frameless, always-on-top window showing an animated pixel-art cat that sits on the desktop. Clicking the cat toggles the main window (the existing task/pomodoro UI); the cat can be dragged to move it, and right-click opens a menu (`📅 规划今天`, `🔍 搜索任务`, `📋 任务列表`, `🍅 番茄钟`, `🗓️ 日历`, `📊 统计` — each shows the main window on that route via `app:navigate` / `appAPI.onNavigate` — plus `主题`, `预览动作`, `退出`). There is no home page: `#/` redirects to `#/tasks`, and the main window starts hidden with its menu bar auto-hidden.
 
 - Code lives in `frontend/electron/` (`main.cjs` = main process with the pet + main windows and IPC; `preload.cjs` = the `window.petAPI` bridge) and `frontend/src/pet/` (pet renderer). Entry HTML: `frontend/pet.html` (pet) and `frontend/index.html` (main app). `vite.config.ts` is multi-page (`main` + `pet`) with `base: './'`.
 - Routing MUST stay on `HashRouter` (see `src/App.tsx`) and internal links MUST use `#/...`. `BrowserRouter`/`href="/..."` renders a blank window because Electron loads pages over `file://` (and `.../index.html`), where path-based routes never match.
@@ -35,7 +35,14 @@ The frontend can run as a desktop app whose entry point is a **desktop pet**: a 
 - Daily planner (`src/components/DailyPlanner.tsx`, logic in `src/core/dailyPlan.ts`): pops up once per day (day starts at 04:00, `planDayKey`) on app start, and on `plan:check` sent by the main process on `powerMonitor` `resume` / `unlock-screen` and a 60 s tick (only when the user is active). It does not interrupt a running pomodoro. Today's order is `localStorage['dailyPlan']`; tasks stay in `localStorage['tasks']`. Opened manually via pet menu `📅 规划今天`. When it pops up while the main window is hidden, it shows on an opaque backdrop and hides the window again on close (unless a task was started).
 - Breaks (`src/components/BreakOverlay.tsx`, `src/core/store/breakStore.ts`): choosing `任务已完成` in the pomodoro summary starts a 10-minute break (`BREAK_MINUTES`, timestamp-based). When it ends the main window is shown with the next unfinished task from today's plan.
 
-**AI planning assistant (optional, bring-your-own API key)**
+**Scheduled tasks & calendar**
+
+- A task can carry `dueDate` (`'YYYY-MM-DD'`, local date) — set via the 计划日期 picker (`src/components/DueDatePicker.tsx`: 不定 / 今天 / 明天 / 下周 / 下个月 / any date) in the create/edit dialogs of `SimpleTasksPage`. Helpers live in `src/core/schedule.ts`; "today" is `planDayKey()` (day starts at 04:00) so it matches the daily planner.
+- Task list: tasks scheduled after today are folded into a collapsed `📆 以后的任务` section and come back to the main list on their day; overdue ones get a red badge.
+- Daily planner: on the first open of a day it pre-fills in-progress tasks plus pending tasks due today/overdue; tasks due later are hidden from its backlog (and from what the AI planner sees). The AI prompt includes each task's `dueDate`.
+- Calendar page `#/calendar` (`src/pages/CalendarPage.tsx`, pet menu `🗓️ 日历`, nav link `日历`): month grid (Mon-first) of tasks by `dueDate`, click a day to list/add tasks for it, drag a chip to another day or use 改期 to reschedule, and schedule undated tasks onto the selected day.
+
+
 
 - `electron/ai.cjs` (main process) calls the model with the official SDKs: `openai` for the OpenAI-compatible Chat Completions format (OpenAI, DeepSeek, other compatible services via Base URL) and `@anthropic-ai/sdk` for the Claude Messages API. Config is in `userData/ai-config.json`; the API key is encrypted with `safeStorage` and never sent to the renderer. Renderer bridge: `window.aiAPI` (`getConfig` / `setConfig` / `complete`).
 - Claude requests use `output_config` (`effort: 'medium'`, JSON-schema format) and, only against the official endpoint for models that support it, server-side `fallbacks: 'default'` (beta `server-side-fallback-2026-07-01`). OpenAI-format requests use `response_format: json_object` and retry without it on a 400.

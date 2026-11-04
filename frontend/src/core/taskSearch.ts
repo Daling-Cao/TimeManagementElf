@@ -146,6 +146,7 @@ function describeTask(task: SearchableTask, notesPerTask: number): string {
     `类型：${task.type || '未分类'}`,
     `状态：${STATUS_TEXT[task.status] || task.status}`,
   ];
+  if (task.dueDate) parts.push(`计划：${task.dueDate}`);
   if (task.startedAt) parts.push(`开始：${day(task.startedAt)}`);
   if (task.completedAt) parts.push(`完成：${day(task.completedAt)}`);
   if (task.totalDuration) parts.push(`用时：${task.totalDuration} 分钟`);

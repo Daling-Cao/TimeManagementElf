@@ -15,6 +15,7 @@ import {
 import { useTomatoStore } from '../core/store/tomatoStore';
 import { isAiConfigured, planWithAi, type AiPlanResult } from '../core/ai';
 import AiSettingsDialog from './AiSettingsDialog';
+import { isDueByToday, isOverdue, isUpcoming, todayKey } from '../core/schedule';
 
 function greeting(now: Date): string {
   const h = now.getHours();
@@ -62,10 +63,15 @@ const DailyPlanner: React.FC = () => {
     const existing = loadTodayPlan();
     const unfinished = (id: string) =>
       allTasks.some((t) => t.id === id && t.status !== 'completed');
-    // 今天已经规划过：继续编辑那份；否则把进行中的任务先放进来，通常是昨天没做完的。
+    // 今天已经规划过：继续编辑那份；否则把进行中的任务（通常是昨天没做完的）
+    // 和计划在今天 / 已过期的任务先放进来。排在以后的任务不放。
+    const today = todayKey();
     const initial = existing
       ? existing.taskIds.filter(unfinished)
-      : allTasks.filter((t) => t.status === 'in_progress').map((t) => t.id);
+      : [
+          ...allTasks.filter((t) => t.status === 'in_progress' && !isUpcoming(t, today)),
+          ...allTasks.filter((t) => t.status === 'pending' && isDueByToday(t, today)),
+        ].map((t) => t.id);
     // 弹出即记为“今天已提醒过”，点“稍后再说”后不会在每次解锁时反复打扰。
     savePlan(existing ? existing.taskIds : initial);
     setTasks(allTasks);
@@ -126,7 +132,11 @@ const DailyPlanner: React.FC = () => {
   const planned = planIds
     .map((id) => taskById.get(id))
     .filter((t): t is PlanTask => !!t);
-  const backlog = tasks.filter((t) => t.status !== 'completed' && !planIds.includes(t.id));
+  // 待办：排在以后某天的任务不出现（到那天再出现）；计划在今天 / 已过期的排在前面。
+  const today = todayKey();
+  const backlog = tasks
+    .filter((t) => t.status !== 'completed' && !planIds.includes(t.id) && !isUpcoming(t, today))
+    .sort((a, b) => Number(isDueByToday(b, today)) - Number(isDueByToday(a, today)));
 
   const addNewTask = () => {
     const title = newTitle.trim();
@@ -500,6 +510,11 @@ const DailyPlanner: React.FC = () => {
                     title="加入今天的安排"
                   >
                     ＋ {task.title}
+                    {isDueByToday(task, today) && (
+                      <span style={{ marginLeft: 4, fontSize: 11, color: isOverdue(task, today) ? '#ef4444' : '#4338ca' }}>
+                        {isOverdue(task, today) ? '已过期' : '计划今天'}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>

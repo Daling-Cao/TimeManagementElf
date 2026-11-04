@@ -8,6 +8,7 @@ import SimpleTasksPage from './pages/SimpleTasksPage';
 import SimpleTomatoPage from './pages/SimpleTomatoPage';
 import StatisticsPage from './pages/StatisticsPage';
 import PetThemesPage from './pages/PetThemesPage';
+import CalendarPage from './pages/CalendarPage';
 import { useTomatoStore } from './core/store/tomatoStore';
 import { useBreakStore } from './core/store/breakStore';
 
@@ -78,7 +79,7 @@ function AppRoutes() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // 小猫右键菜单（任务列表 / 番茄钟 / 统计）让主窗口跳到对应页面
+  // 小猫右键菜单（任务列表 / 番茄钟 / 日历 / 统计）让主窗口跳到对应页面
   useEffect(() => window.appAPI?.onNavigate((route) => navigate(route)), [navigate]);
 
   // key 跟随路由：某页出错后切到别的页会重新挂载，不会一直停在错误页
@@ -88,6 +89,7 @@ function AppRoutes() {
         <Route path="/" element={<Navigate to="/tasks" replace />} />
         <Route path="/tasks" element={<SimpleTasksPage />} />
         <Route path="/tomato" element={<SimpleTomatoPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/statistics" element={<StatisticsPage />} />
         <Route path="/pet-themes" element={<PetThemesPage />} />
         <Route path="*" element={<Navigate to="/tasks" replace />} />

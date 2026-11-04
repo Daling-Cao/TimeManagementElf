@@ -23,6 +23,8 @@ export interface PlanTask {
   estimateMinutes?: number;
   /** AI 生成的工作笔记总结（任务详情里生成）。 */
   aiSummary?: TaskAiSummary;
+  /** 计划在哪天做（'YYYY-MM-DD'，本地日期），见 core/schedule.ts。 */
+  dueDate?: string;
 }
 
 export interface DailyPlan {
@@ -105,9 +107,10 @@ export function newTaskId(): string {
   return `${Date.now().toString(36)}-${idCounter.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function createTask(title: string, estimateMinutes?: number): PlanTask {
+export function createTask(title: string, estimateMinutes?: number, dueDate?: string): PlanTask {
   return {
     ...(estimateMinutes ? { estimateMinutes } : {}),
+    ...(dueDate ? { dueDate } : {}),
     id: newTaskId(),
     title,
     status: 'pending',
