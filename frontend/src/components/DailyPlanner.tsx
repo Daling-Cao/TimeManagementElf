@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   OPEN_PLANNER_EVENT,
   createTask,
+  newTaskId,
   loadTodayPlan,
   needsPlanningToday,
   readTasks,
@@ -48,8 +49,13 @@ const DailyPlanner: React.FC = () => {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiAdvice, setAiAdvice] = useState('');
+  // 每次发请求、关闭或重新打开窗口都会加一；回复回来时编号对不上就丢弃，
+  // 避免过期的回复在窗口关掉后覆盖用户刚保存的安排。
+  const aiRequestRef = useRef(0);
 
   const openPlanner = () => {
+    aiRequestRef.current += 1;
+    setAiBusy(false);
     const allTasks = readTasks();
     const existing = loadTodayPlan();
     const unfinished = (id: string) =>
@@ -110,7 +116,7 @@ const DailyPlanner: React.FC = () => {
 
   const addNewTask = () => {
     const title = newTitle.trim();
-    if (!title) return;
+    if (!title || aiBusy) return;
     const task = createTask(title);
     const nextTasks = [...readTasks(), task];
     writeTasks(nextTasks);
@@ -123,6 +129,7 @@ const DailyPlanner: React.FC = () => {
   // 把 AI 给出的安排落到任务列表：已有任务沿用，新任务创建，顺序以 AI 为准。
   const applyAiPlan = (result: AiPlanResult) => {
     const current = readTasks();
+    const usedIds = new Set(current.map((t) => t.id));
     const order: string[] = [];
     for (const item of result.items) {
       const existing = current.find(
@@ -133,6 +140,9 @@ const DailyPlanner: React.FC = () => {
         existing.estimateMinutes = item.minutes;
       } else {
         const task = createTask(item.title, item.minutes);
+        // 再保险一次：和已有任务（包括这一批刚建的）撞号就重新生成。
+        while (usedIds.has(task.id)) task.id = newTaskId();
+        usedIds.add(task.id);
         current.push(task);
         order.push(task.id);
       }
@@ -146,23 +156,27 @@ const DailyPlanner: React.FC = () => {
   const askAi = async () => {
     const message = aiMessage.trim();
     if (!message || aiBusy) return;
+    const requestId = ++aiRequestRef.current;
     setAiBusy(true);
     setAiError('');
     try {
       const result = await planWithAi(message, planned, backlog);
+      if (requestId !== aiRequestRef.current) return; // 窗口已关闭或重开，丢弃过期回复
       applyAiPlan(result);
       setAiAdvice(result.advice);
       setAiMessage('');
     } catch (error) {
+      if (requestId !== aiRequestRef.current) return;
       setAiError(error instanceof Error ? error.message : String(error));
     } finally {
-      setAiBusy(false);
+      if (requestId === aiRequestRef.current) setAiBusy(false);
     }
   };
 
   const totalMinutes = planned.reduce((sum, t) => sum + (t.estimateMinutes || 0), 0);
 
   const move = (index: number, delta: number) => {
+    if (aiBusy) return;
     setPlanIds((ids) => {
       const target = index + delta;
       if (target < 0 || target >= ids.length) return ids;
@@ -172,19 +186,39 @@ const DailyPlanner: React.FC = () => {
     });
   };
 
-  const close = () => setOpen(false);
+  const close = () => {
+    aiRequestRef.current += 1; // 作废还没返回的 AI 请求
+    setAiBusy(false);
+    setOpen(false);
+  };
 
+  // AI 正在排程时锁住会和它冲突的操作（保存、开始、手动编辑），关闭窗口仍然可以。
   const saveAndClose = () => {
+    if (aiBusy) return;
     savePlan(planIds);
     close();
   };
 
+  const removeFromPlan = (taskId: string) => {
+    if (aiBusy) return;
+    setPlanIds((ids) => ids.filter((id) => id !== taskId));
+  };
+
+  const addToPlan = (taskId: string) => {
+    if (aiBusy) return;
+    setPlanIds((ids) => [...ids, taskId]);
+  };
+
   const start = (taskId: string) => {
+    if (aiBusy) return;
     // 选中的任务排到第一位，其余顺序不变。
     const ordered = [taskId, ...planIds.filter((id) => id !== taskId)];
     savePlan(ordered);
     if (startTaskNow(taskId, navigate)) close();
   };
+
+  // AI 排程进行中：手动编辑区域变灰且不可点击
+  const lockedStyle: React.CSSProperties = aiBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
 
   const smallBtn: React.CSSProperties = {
     border: '1px solid #e5e7eb',
@@ -325,7 +359,7 @@ const DailyPlanner: React.FC = () => {
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 8, margin: '8px 0 16px' }}>
+          <div style={{ display: 'flex', gap: 8, margin: '8px 0 16px', ...lockedStyle }} aria-busy={aiBusy}>
             <input
               ref={inputRef}
               value={newTitle}
@@ -382,7 +416,7 @@ const DailyPlanner: React.FC = () => {
               还没有安排，在上面添加，或从下面的待办里挑选
             </div>
           ) : (
-            <ol style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            <ol style={{ listStyle: 'none', padding: 0, margin: 0, ...lockedStyle }} aria-busy={aiBusy}>
               {planned.map((task, index) => (
                 <li
                   key={task.id}
@@ -422,7 +456,7 @@ const DailyPlanner: React.FC = () => {
                   </button>
                   <button
                     style={smallBtn}
-                    onClick={() => setPlanIds((ids) => ids.filter((id) => id !== task.id))}
+                    onClick={() => removeFromPlan(task.id)}
                     title="移出今天的安排"
                   >
                     ✕
@@ -441,11 +475,11 @@ const DailyPlanner: React.FC = () => {
           {backlog.length > 0 && (
             <>
               <h3 style={{ fontSize: 15, color: '#111827', margin: '16px 0 8px' }}>待办里的任务</h3>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16, ...lockedStyle }}>
                 {backlog.map((task) => (
                   <button
                     key={task.id}
-                    onClick={() => setPlanIds((ids) => [...ids, task.id])}
+                    onClick={() => addToPlan(task.id)}
                     style={{ ...smallBtn, borderRadius: 999, padding: '6px 12px' }}
                     title="加入今天的安排"
                   >
@@ -469,19 +503,23 @@ const DailyPlanner: React.FC = () => {
           <button onClick={close} style={{ ...smallBtn, padding: '10px 16px', fontSize: 14 }}>
             稍后再说
           </button>
-          <button onClick={saveAndClose} style={{ ...smallBtn, padding: '10px 16px', fontSize: 14 }}>
+          <button
+            onClick={saveAndClose}
+            disabled={aiBusy}
+            style={{ ...smallBtn, padding: '10px 16px', fontSize: 14, opacity: aiBusy ? 0.5 : 1 }}
+          >
             保存安排
           </button>
           <button
             onClick={() => planned[0] && start(planned[0].id)}
-            disabled={planned.length === 0}
+            disabled={planned.length === 0 || aiBusy}
             style={{
               padding: '10px 16px',
               fontSize: 14,
               borderRadius: 6,
               border: 'none',
-              cursor: planned.length === 0 ? 'not-allowed' : 'pointer',
-              background: planned.length === 0 ? '#fca5a5' : '#ef4444',
+              cursor: planned.length === 0 || aiBusy ? 'not-allowed' : 'pointer',
+              background: planned.length === 0 || aiBusy ? '#fca5a5' : '#ef4444',
               color: 'white',
             }}
           >
