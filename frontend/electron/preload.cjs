@@ -52,6 +52,13 @@ contextBridge.exposeInMainWorld('dialogAPI', {
 // 主窗口：显示自己，以及接收“每日规划”的检查/打开请求。
 contextBridge.exposeInMainWorld('appAPI', {
   showMain: () => ipcRenderer.send('main:show'),
+  hideMain: () => ipcRenderer.send('main:hide'),
+  isMainVisible: () => ipcRenderer.sendSync('main:is-visible'),
+  onNavigate: (cb) => {
+    const listener = (_event, route) => cb(String(route || '/tasks'));
+    ipcRenderer.on('app:navigate', listener);
+    return () => ipcRenderer.removeListener('app:navigate', listener);
+  },
   onPlanCheck: (cb) => {
     const listener = (_event, payload) => cb(payload || {});
     ipcRenderer.on('plan:check', listener);

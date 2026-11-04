@@ -35,6 +35,8 @@ function formatToday(now: Date): string {
 const DailyPlanner: React.FC = () => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  // 主窗口原本是隐藏的、专门为规划才弹出来：背景不透出页面，关掉规划后窗口也一起收起。
+  const [standalone, setStandalone] = useState(false);
   const [tasks, setTasks] = useState<PlanTask[]>([]);
   const [planIds, setPlanIds] = useState<string[]>([]);
   const [newTitle, setNewTitle] = useState('');
@@ -66,8 +68,10 @@ const DailyPlanner: React.FC = () => {
     setAiMessage('');
     setAiError('');
     setAiAdvice('');
+    const api = window.appAPI;
+    setStandalone(!!api && !api.isMainVisible());
     setOpen(true);
-    window.appAPI?.showMain();
+    api?.showMain();
     isAiConfigured().then(setAiConfigured);
   };
 
@@ -98,6 +102,16 @@ const DailyPlanner: React.FC = () => {
 
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 50);
+  }, [open]);
+
+  // 规划弹窗打开时锁住后面页面的滚动，不露出它的滚动条
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, [open]);
 
   if (!open) return null;
@@ -172,7 +186,10 @@ const DailyPlanner: React.FC = () => {
     });
   };
 
-  const close = () => setOpen(false);
+  const close = () => {
+    setOpen(false);
+    if (standalone) window.appAPI?.hideMain();
+  };
 
   const saveAndClose = () => {
     savePlan(planIds);
@@ -183,7 +200,8 @@ const DailyPlanner: React.FC = () => {
     // 选中的任务排到第一位，其余顺序不变。
     const ordered = [taskId, ...planIds.filter((id) => id !== taskId)];
     savePlan(ordered);
-    if (startTaskNow(taskId, navigate)) close();
+    // 开始任务后要看番茄钟，不收起窗口
+    if (startTaskNow(taskId, navigate)) setOpen(false);
   };
 
   const smallBtn: React.CSSProperties = {
@@ -203,7 +221,7 @@ const DailyPlanner: React.FC = () => {
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(17, 24, 39, 0.45)',
+        background: standalone ? '#eef2f7' : 'rgba(17, 24, 39, 0.45)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
