@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "时间管理小精灵：番茄钟、任务管理与像素桌面宠物",
   "author": "TimeManagementElf",
   "type": "module",
@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.4.0",
+    "ical.js": "^2.2.1",
     "idb": "^8.0.3",
     "openai": "^7.50.0",
     "react": "^19.1.1",

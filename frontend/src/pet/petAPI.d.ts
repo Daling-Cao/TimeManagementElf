@@ -188,8 +188,14 @@ export interface AiAPI {
   }) => Promise<{ ok: true; text: string } | { ok: false; error: string }>;
 }
 
+export interface CalendarAPI {
+  /** 主进程下载订阅日历（ICS 链接，支持 webcal://）。 */
+  fetchIcs: (url: string) => Promise<{ ok: true; text: string } | { ok: false; error: string }>;
+}
+
 declare global {
   interface Window {
+    calendarAPI?: CalendarAPI;
     aiAPI?: AiAPI;
     appAPI?: AppAPI;
     petAPI?: PetAPI;

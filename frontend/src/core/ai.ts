@@ -130,7 +130,8 @@ function describeTasks(tasks: PlanTask[]): string {
     .map((t) => {
       const status = t.status === 'in_progress' ? '进行中' : '待办';
       const est = t.estimateMinutes ? `，预计 ${t.estimateMinutes} 分钟` : '';
-      return `- id=${t.id}：${t.title}（${status}${est}）`;
+      const due = t.dueDate ? `，计划日期 ${t.dueDate}` : '';
+      return `- id=${t.id}：${t.title}（${status}${est}${due}）`;
     })
     .join('\n');
 }

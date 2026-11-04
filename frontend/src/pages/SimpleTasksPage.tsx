@@ -8,6 +8,10 @@ import TaskSummaryPanel from '../components/TaskSummaryPanel';
 import type { TaskAiSummary } from '../core/ai';
 import { openDailyPlanner } from '../core/dailyPlan';
 import { openTaskSearch } from '../core/taskSearch';
+import DueDatePicker from '../components/DueDatePicker';
+import CalendarSelect from '../components/CalendarSelect';
+import { DEFAULT_CALENDAR_ID } from '../core/calendars';
+import { formatDueLabel, isOverdue, isUpcoming, todayKey } from '../core/schedule';
 
 interface TomatoSummary {
   id: string;
@@ -30,6 +34,9 @@ interface Task {
   startedAt?: string; // 任务开始时间
   completedAt?: string; // 任务完成时间
   aiSummary?: TaskAiSummary; // AI 生成的工作笔记总结
+  dueDate?: string; // 计划日期 YYYY-MM-DD
+  calendarId?: string; // 放在哪个本地日历（没有 = 默认日历）
+  sourceEventId?: string; // 由外部日历事件转来的
 }
 
 const SimpleTasksPage: React.FC = () => {
@@ -78,12 +85,23 @@ const SimpleTasksPage: React.FC = () => {
     return completedDate >= today; // 只显示今天完成的任务
   });
 
+  // 排在以后某天的任务单独放在下面（默认折叠），到那天再回到主列表
+  const today = todayKey();
+  const currentTasks = activeTasks.filter((t) => !isUpcoming(t, today));
+  const upcomingTasks = activeTasks
+    .filter((t) => isUpcoming(t, today))
+    .sort((a, b) => (a.dueDate! < b.dueDate! ? -1 : a.dueDate! > b.dueDate! ? 1 : 0));
+  const [showUpcoming, setShowUpcoming] = useState(false);
+  const listedTasks = showUpcoming ? [...currentTasks, ...upcomingTasks] : currentTasks;
+
   const [newTask, setNewTask] = useState('');
   const [showDialog, setShowDialog] = useState(false);
   const [newTaskPriority, setNewTaskPriority] = useState<Task['priority']>('medium');
   const [newTaskType, setNewTaskType] = useState('工作');
   const [isCustomType, setIsCustomType] = useState(false);
   const [customTypeInput, setCustomTypeInput] = useState('');
+  const [newTaskDue, setNewTaskDue] = useState('');
+  const [newTaskCalendar, setNewTaskCalendar] = useState(DEFAULT_CALENDAR_ID);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
@@ -95,6 +113,8 @@ const SimpleTasksPage: React.FC = () => {
   const [editType, setEditType] = useState('工作');
   const [editIsCustomType, setEditIsCustomType] = useState(false);
   const [editCustomTypeInput, setEditCustomTypeInput] = useState('');
+  const [editDue, setEditDue] = useState('');
+  const [editCalendar, setEditCalendar] = useState(DEFAULT_CALENDAR_ID);
   const [editError, setEditError] = useState('');
 
   // 一次性数据迁移：为旧的已完成任务补写 completedAt（优先用最后一条总结的时间）
@@ -165,6 +185,8 @@ const SimpleTasksPage: React.FC = () => {
     setNewTaskType('工作');
     setIsCustomType(false);
     setCustomTypeInput('');
+    setNewTaskDue('');
+    setNewTaskCalendar(DEFAULT_CALENDAR_ID);
   };
 
   const addTask = () => {
@@ -179,6 +201,8 @@ const SimpleTasksPage: React.FC = () => {
         summaries: [],
         totalDuration: 0,
         completedSessions: 0,
+        ...(newTaskDue ? { dueDate: newTaskDue } : {}),
+        ...(newTaskCalendar !== DEFAULT_CALENDAR_ID ? { calendarId: newTaskCalendar } : {}),
       };
       setTasks([...tasks, task]);
       closeDialog();
@@ -289,6 +313,8 @@ const SimpleTasksPage: React.FC = () => {
     setEditType(task.type);
     setEditIsCustomType(false);
     setEditCustomTypeInput('');
+    setEditDue(task.dueDate || '');
+    setEditCalendar(task.calendarId || DEFAULT_CALENDAR_ID);
     setEditError('');
     setShowEditDialog(true);
   };
@@ -333,6 +359,8 @@ const SimpleTasksPage: React.FC = () => {
         title,
         priority: editPriority,
         type: finalType,
+        dueDate: editDue || undefined,
+        calendarId: editCalendar !== DEFAULT_CALENDAR_ID ? editCalendar : undefined,
       };
     }));
     closeEditDialog();
@@ -381,6 +409,50 @@ const SimpleTasksPage: React.FC = () => {
     }
   };
 
+  const renderDueBadge = (task: Task) => {
+    const overdue = isOverdue(task, today);
+    return (
+      <span
+        title={`计划日期：${task.dueDate}`}
+        style={{
+          padding: '2px 8px',
+          borderRadius: '12px',
+          fontSize: '12px',
+          backgroundColor: overdue ? '#fee2e2' : '#eef2ff',
+          color: overdue ? '#b91c1c' : '#4338ca',
+        }}
+      >
+        📅 {formatDueLabel(task.dueDate!, today)}{overdue ? ' · 已过期' : ''}
+      </span>
+    );
+  };
+
+  const renderUpcomingHeader = () => (
+    <div
+      role="button"
+      onClick={() => setShowUpcoming((v) => !v)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        margin: '12px 0',
+        padding: '8px 12px',
+        border: '1px dashed #c7d2fe',
+        borderRadius: '6px',
+        background: '#f5f7ff',
+        color: '#4338ca',
+        fontSize: '13px',
+        cursor: 'pointer',
+      }}
+    >
+      <span>{showUpcoming ? '▾' : '▸'} 📆 以后的任务（{upcomingTasks.length}）</span>
+      <span style={{ color: '#6b7280', flex: 1 }}>到计划那天会自动回到上面的列表</span>
+      <a href="#/calendar" onClick={(e) => e.stopPropagation()} style={{ color: '#4338ca' }}>
+        在日历中查看 →
+      </a>
+    </div>
+  );
+
   return (
     <div style={{ 
       minHeight: '100vh', 
@@ -403,6 +475,7 @@ const SimpleTasksPage: React.FC = () => {
             <nav style={{ display: 'flex', gap: '32px' }}>
               <a href="#/tasks" style={{ color: '#0284c7', fontWeight: '500', textDecoration: 'none' }}>任务列表</a>
               <a href="#/tomato" style={{ color: '#6b7280', textDecoration: 'none' }}>番茄钟</a>
+              <a href="#/calendar" style={{ color: '#6b7280', textDecoration: 'none' }}>日历</a>
               <a href="#/statistics" style={{ color: '#6b7280', textDecoration: 'none' }}>统计</a>
               {/* 桌面版从小猫右键菜单打开规划；网页版没有小猫，保留这个入口 */}
               {!window.petAPI && (
@@ -458,9 +531,10 @@ const SimpleTasksPage: React.FC = () => {
                 还没有任务，创建一个开始吧！
               </div>
             ) : (
-              activeTasks.map(task => (
+              listedTasks.map((task, index) => (
+                <React.Fragment key={task.id}>
+                {index === currentTasks.length && renderUpcomingHeader()}
                 <div
-                  key={task.id}
                   style={{
                     border: '1px solid #e5e7eb',
                     borderRadius: '6px',
@@ -514,6 +588,7 @@ const SimpleTasksPage: React.FC = () => {
                       <span style={{ fontSize: '12px', color: '#6b7280' }}>
                         {task.type}
                       </span>
+                      {task.dueDate && renderDueBadge(task)}
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <select
@@ -622,8 +697,10 @@ const SimpleTasksPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                </React.Fragment>
               ))
             )}
+            {!showUpcoming && upcomingTasks.length > 0 && renderUpcomingHeader()}
           </div>
         </div>
       </main>
@@ -756,6 +833,22 @@ const SimpleTasksPage: React.FC = () => {
                   }}
                 />
               )}
+            </div>
+
+            {/* 计划日期 */}
+            <div style={{ marginBottom: '24px', marginTop: '-8px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                计划日期
+              </label>
+              <DueDatePicker value={newTaskDue} onChange={setNewTaskDue} />
+            </div>
+
+            {/* 放进哪个日历 */}
+            <div style={{ marginBottom: '24px', marginTop: '-8px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                日历
+              </label>
+              <CalendarSelect value={newTaskCalendar} onChange={setNewTaskCalendar} />
             </div>
 
             {/* Buttons */}
@@ -1119,6 +1212,22 @@ const SimpleTasksPage: React.FC = () => {
                   }}
                 />
               )}
+            </div>
+
+            {/* 计划日期 */}
+            <div style={{ margin: '16px 0' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                计划日期
+              </label>
+              <DueDatePicker value={editDue} onChange={setEditDue} />
+            </div>
+
+            {/* 放进哪个日历 */}
+            <div style={{ margin: '16px 0' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                日历
+              </label>
+              <CalendarSelect value={editCalendar} onChange={setEditCalendar} />
             </div>
 
             {editError && (
