@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTomatoStore } from '../core/store/tomatoStore';
 import FloatingTomatoTimer from '../components/FloatingTomatoTimer';
 import { parseStoredList } from '../core/services/storedList';
@@ -7,6 +7,7 @@ import { confirmDialog } from '../core/services/dialogs';
 import TaskSummaryPanel from '../components/TaskSummaryPanel';
 import type { TaskAiSummary } from '../core/ai';
 import { openDailyPlanner } from '../core/dailyPlan';
+import { openTaskSearch } from '../core/taskSearch';
 
 interface TomatoSummary {
   id: string;
@@ -229,6 +230,21 @@ const SimpleTasksPage: React.FC = () => {
     setSelectedTask(null);
   };
 
+  // 搜索结果点进来：#/tasks?open=<id> 直接打开该任务的详情（往日已完成、列表里不显示的也可以）
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openId = searchParams.get('open');
+  useEffect(() => {
+    if (!openId) return;
+    const latest = parseStoredList<Task>(localStorage.getItem('tasks')) ?? tasks;
+    const target = latest.find((t) => t.id === openId);
+    if (target) {
+      setTasks(latest);
+      viewTaskDetail(target);
+    }
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只响应 open 参数变化
+  }, [openId]);
+
   const formatDuration = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
@@ -390,7 +406,10 @@ const SimpleTasksPage: React.FC = () => {
               <a href="#/statistics" style={{ color: '#6b7280', textDecoration: 'none' }}>统计</a>
               {/* 桌面版从小猫右键菜单打开规划；网页版没有小猫，保留这个入口 */}
               {!window.petAPI && (
-                <a href="#" onClick={(e) => { e.preventDefault(); openDailyPlanner(); }} style={{ color: '#6b7280', textDecoration: 'none' }}>📅 规划今天</a>
+                <>
+                  <a href="#" onClick={(e) => { e.preventDefault(); openDailyPlanner(); }} style={{ color: '#6b7280', textDecoration: 'none' }}>📅 规划今天</a>
+                  <a href="#" onClick={(e) => { e.preventDefault(); openTaskSearch(); }} style={{ color: '#6b7280', textDecoration: 'none' }}>🔍 搜索</a>
+                </>
               )}
             </nav>
           </div>

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import PageErrorBoundary from './components/PageErrorBoundary';
 import DailyPlanner from './components/DailyPlanner';
+import TaskSearchDialog from './components/TaskSearchDialog';
 import BreakOverlay from './components/BreakOverlay';
 import SimpleTasksPage from './pages/SimpleTasksPage';
 import SimpleTomatoPage from './pages/SimpleTomatoPage';
@@ -58,6 +59,7 @@ function App() {
         {/* 全局弹层放在路由外，切页时不会被卸载 */}
         <BreakOverlay />
         <DailyPlanner />
+        <TaskSearchDialog />
       </div>
     </Router>
   );
