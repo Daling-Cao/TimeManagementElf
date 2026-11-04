@@ -64,6 +64,13 @@ contextBridge.exposeInMainWorld('appAPI', {
   },
 });
 
+// AI 助手：配置保存在主进程（key 加密），请求也由主进程发出，页面拿不到 key。
+contextBridge.exposeInMainWorld('aiAPI', {
+  getConfig: () => ipcRenderer.invoke('ai:get-config'),
+  setConfig: (config) => ipcRenderer.invoke('ai:set-config', config),
+  complete: (request) => ipcRenderer.invoke('ai:complete', request),
+});
+
 contextBridge.exposeInMainWorld('dataAPI', {
   load: () => ipcRenderer.invoke('data:load'),
   saveTasks: (tasks) => ipcRenderer.invoke('data:save-tasks', tasks),

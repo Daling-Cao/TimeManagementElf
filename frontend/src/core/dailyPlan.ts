@@ -6,6 +6,7 @@ import { readStoredList } from './services/storedList';
 import { alertDialog } from './services/dialogs';
 import { useTomatoStore } from './store/tomatoStore';
 import { useBreakStore } from './store/breakStore';
+import type { TaskAiSummary } from './ai';
 
 export interface PlanTask {
   id: string;
@@ -18,6 +19,10 @@ export interface PlanTask {
   completedSessions?: number;
   startedAt?: string;
   completedAt?: string;
+  /** 预计时长（分钟），由 AI 规划时给出。 */
+  estimateMinutes?: number;
+  /** AI 生成的工作笔记总结（任务详情里生成）。 */
+  aiSummary?: TaskAiSummary;
 }
 
 export interface DailyPlan {
@@ -89,8 +94,9 @@ export function writeTasks(tasks: PlanTask[]): void {
   window.dispatchEvent(new Event('focus'));
 }
 
-export function createTask(title: string): PlanTask {
+export function createTask(title: string, estimateMinutes?: number): PlanTask {
   return {
+    ...(estimateMinutes ? { estimateMinutes } : {}),
     id: `${Date.now()}${Math.floor(Math.random() * 1000)}`,
     title,
     status: 'pending',

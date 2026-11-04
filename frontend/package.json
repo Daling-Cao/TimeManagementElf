@@ -20,7 +20,9 @@
     "themes:gif": "node scripts/build-gif-theme.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
     "idb": "^8.0.3",
+    "openai": "^7.50.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.4",

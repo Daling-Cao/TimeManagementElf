@@ -4,6 +4,8 @@ import { useTomatoStore } from '../core/store/tomatoStore';
 import FloatingTomatoTimer from '../components/FloatingTomatoTimer';
 import { parseStoredList } from '../core/services/storedList';
 import { confirmDialog } from '../core/services/dialogs';
+import TaskSummaryPanel from '../components/TaskSummaryPanel';
+import type { TaskAiSummary } from '../core/ai';
 
 interface TomatoSummary {
   id: string;
@@ -25,6 +27,7 @@ interface Task {
   completedSessions?: number; // 完成的番茄钟数量
   startedAt?: string; // 任务开始时间
   completedAt?: string; // 任务完成时间
+  aiSummary?: TaskAiSummary; // AI 生成的工作笔记总结
 }
 
 const SimpleTasksPage: React.FC = () => {
@@ -878,6 +881,9 @@ const SimpleTasksPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* 按天用时 + AI 工作笔记总结；key 跟随任务，切换任务时重置 */}
+            <TaskSummaryPanel key={selectedTask.id} task={selectedTask} />
 
             {/* 总结记录列表 */}
             <div>
