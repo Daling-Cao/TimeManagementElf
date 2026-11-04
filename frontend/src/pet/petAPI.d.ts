@@ -62,8 +62,40 @@ export interface AppAPI {
   onPlanOpen: (cb: () => void) => () => void;
 }
 
+export type AiFormat = 'openai' | 'anthropic';
+
+export interface AiPublicConfig {
+  format: AiFormat;
+  baseURL: string;
+  model: string;
+  hasKey: boolean;
+  configured: boolean;
+  encryptionAvailable: boolean;
+}
+
+export interface AiConfigInput {
+  format: AiFormat;
+  baseURL: string;
+  model: string;
+  /** undefined = keep the saved key; '' = remove it. */
+  apiKey?: string;
+}
+
+export interface AiAPI {
+  getConfig: () => Promise<AiPublicConfig>;
+  setConfig: (
+    config: AiConfigInput,
+  ) => Promise<{ ok: true; config: AiPublicConfig } | { ok: false; error: string }>;
+  complete: (request: {
+    system: string;
+    user: string;
+    jsonSchema?: Record<string, unknown>;
+  }) => Promise<{ ok: true; text: string } | { ok: false; error: string }>;
+}
+
 declare global {
   interface Window {
+    aiAPI?: AiAPI;
     appAPI?: AppAPI;
     petAPI?: PetAPI;
     dataAPI?: DesktopDataAPI;

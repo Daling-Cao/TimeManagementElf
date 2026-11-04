@@ -12,6 +12,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const log = require('./logger.cjs');
 const dataStore = require('./data-store.cjs');
+const ai = require('./ai.cjs');
 
 // In dev we load the Vite dev server (VITE_DEV_SERVER_URL is set by the
 // `electron:dev` script); otherwise we load the built files from dist/.
@@ -491,6 +492,22 @@ ipcMain.handle('data:load', () => dataStore.loadAll());
 ipcMain.handle('data:save-tasks', (_event, tasks) => dataStore.saveTasks(tasks));
 ipcMain.handle('data:save-history', (_event, history) => dataStore.saveHistory(history));
 ipcMain.handle('data:get-root', () => dataStore.getDataRoot());
+ipcMain.handle('ai:get-config', () => ai.getPublicConfig());
+ipcMain.handle('ai:set-config', (_event, config) => {
+  try {
+    return { ok: true, config: ai.setConfig(config) };
+  } catch (error) {
+    log.error('ai', 'Could not save AI config', error);
+    return { ok: false, error: error.message || String(error) };
+  }
+});
+ipcMain.handle('ai:complete', (_event, request) =>
+  ai.complete({
+    system: String((request && request.system) || ''),
+    user: String((request && request.user) || ''),
+    jsonSchema: request && request.jsonSchema ? request.jsonSchema : undefined,
+  }),
+);
 ipcMain.on('app:quit', () => {
   log.info('app', 'Quit requested through IPC');
   app.isQuitting = true;
@@ -518,6 +535,7 @@ if (!hasSingleInstanceLock) {
   app.whenReady().then(() => {
     log.init(app);
     dataStore.init(app);
+    ai.init(app);
     settingsFile = path.join(app.getPath('userData'), 'app-settings.json');
     log.info('app', 'Electron app ready with single-instance lock', {
       autostart: process.argv.includes('--autostart'),

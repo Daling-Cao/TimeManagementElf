@@ -12,6 +12,8 @@ import {
   type PlanTask,
 } from '../core/dailyPlan';
 import { useTomatoStore } from '../core/store/tomatoStore';
+import { isAiConfigured, planWithAi, type AiPlanResult } from '../core/ai';
+import AiSettingsDialog from './AiSettingsDialog';
 
 function greeting(now: Date): string {
   const h = now.getHours();
@@ -38,6 +40,15 @@ const DailyPlanner: React.FC = () => {
   const [newTitle, setNewTitle] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // AI 助手
+  const hasAiBridge = !!window.aiAPI;
+  const [aiConfigured, setAiConfigured] = useState(false);
+  const [showAiSettings, setShowAiSettings] = useState(false);
+  const [aiMessage, setAiMessage] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [aiAdvice, setAiAdvice] = useState('');
+
   const openPlanner = () => {
     const allTasks = readTasks();
     const existing = loadTodayPlan();
@@ -52,8 +63,12 @@ const DailyPlanner: React.FC = () => {
     setTasks(allTasks);
     setPlanIds(initial);
     setNewTitle('');
+    setAiMessage('');
+    setAiError('');
+    setAiAdvice('');
     setOpen(true);
     window.appAPI?.showMain();
+    isAiConfigured().then(setAiConfigured);
   };
 
   // 用 ref 保存最新的 openPlanner，订阅只需要建立一次。
@@ -104,6 +119,48 @@ const DailyPlanner: React.FC = () => {
     setNewTitle('');
     inputRef.current?.focus();
   };
+
+  // 把 AI 给出的安排落到任务列表：已有任务沿用，新任务创建，顺序以 AI 为准。
+  const applyAiPlan = (result: AiPlanResult) => {
+    const current = readTasks();
+    const order: string[] = [];
+    for (const item of result.items) {
+      const existing = current.find(
+        (t) => t.id === item.existing_task_id && t.status !== 'completed',
+      );
+      if (existing) {
+        if (!order.includes(existing.id)) order.push(existing.id);
+        existing.estimateMinutes = item.minutes;
+      } else {
+        const task = createTask(item.title, item.minutes);
+        current.push(task);
+        order.push(task.id);
+      }
+    }
+    writeTasks(current);
+    setTasks(current);
+    setPlanIds(order);
+    savePlan(order);
+  };
+
+  const askAi = async () => {
+    const message = aiMessage.trim();
+    if (!message || aiBusy) return;
+    setAiBusy(true);
+    setAiError('');
+    try {
+      const result = await planWithAi(message, planned, backlog);
+      applyAiPlan(result);
+      setAiAdvice(result.advice);
+      setAiMessage('');
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const totalMinutes = planned.reduce((sum, t) => sum + (t.estimateMinutes || 0), 0);
 
   const move = (index: number, delta: number) => {
     setPlanIds((ids) => {
@@ -180,6 +237,94 @@ const DailyPlanner: React.FC = () => {
         </div>
 
         <div style={{ padding: '0 24px', overflowY: 'auto', flex: 1 }}>
+          {hasAiBridge && (
+            <div
+              style={{
+                margin: '8px 0 4px',
+                padding: 12,
+                borderRadius: 10,
+                background: '#f5f3ff',
+                border: '1px solid #ddd6fe',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+                <strong style={{ fontSize: 14, color: '#5b21b6', flex: 1 }}>🤖 和小精灵商量</strong>
+                <button
+                  onClick={() => setShowAiSettings(true)}
+                  style={{ ...smallBtn, fontSize: 12, padding: '2px 8px' }}
+                >
+                  ⚙️ AI 设置
+                </button>
+              </div>
+              {aiConfigured ? (
+                <>
+                  <textarea
+                    value={aiMessage}
+                    onChange={(e) => setAiMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        askAi();
+                      }
+                    }}
+                    rows={2}
+                    placeholder={
+                      planned.length > 0
+                        ? '想怎么调整？比如：周报挪到下午，再加一个 30 分钟的复盘'
+                        : '说说今天要做什么，比如：写周报、修登录 bug，下午 3 点有个会'
+                    }
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: '8px 10px',
+                      border: '1px solid #c4b5fd',
+                      borderRadius: 8,
+                      fontSize: 14,
+                      resize: 'vertical',
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                    <span style={{ flex: 1, fontSize: 12, color: '#7c3aed' }}>
+                      小精灵会拆分任务、估计时长并排好顺序（Ctrl+Enter 发送）
+                    </span>
+                    <button
+                      onClick={askAi}
+                      disabled={aiBusy || !aiMessage.trim()}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: 6,
+                        border: 'none',
+                        background: aiBusy || !aiMessage.trim() ? '#c4b5fd' : '#7c3aed',
+                        color: 'white',
+                        cursor: aiBusy ? 'wait' : 'pointer',
+                        fontSize: 14,
+                      }}
+                    >
+                      {aiBusy ? '思考中…' : '帮我安排'}
+                    </button>
+                  </div>
+                  {aiError && (
+                    <div style={{ marginTop: 6, fontSize: 13, color: '#b91c1c' }}>{aiError}</div>
+                  )}
+                  {aiAdvice && !aiError && (
+                    <div style={{ marginTop: 6, fontSize: 13, color: '#4c1d95' }}>💬 {aiAdvice}</div>
+                  )}
+                </>
+              ) : (
+                <div style={{ fontSize: 13, color: '#6b7280' }}>
+                  填写 API key（DeepSeek、OpenAI、Claude 等）后，小精灵可以和你商量今天的安排：拆分任务、估时间、排顺序。
+                  <button
+                    onClick={() => setShowAiSettings(true)}
+                    style={{ ...smallBtn, marginLeft: 6, color: '#7c3aed', borderColor: '#c4b5fd' }}
+                  >
+                    去设置
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 8, margin: '8px 0 16px' }}>
             <input
               ref={inputRef}
@@ -216,6 +361,12 @@ const DailyPlanner: React.FC = () => {
 
           <h3 style={{ fontSize: 15, color: '#111827', margin: '0 0 8px' }}>
             今天的安排（{planned.length}）
+            {totalMinutes > 0 && (
+              <span style={{ fontWeight: 'normal', fontSize: 13, color: '#6b7280', marginLeft: 6 }}>
+                预计共 {totalMinutes >= 60 ? `${Math.floor(totalMinutes / 60)} 小时 ` : ''}
+                {totalMinutes % 60 ? `${totalMinutes % 60} 分钟` : ''}
+              </span>
+            )}
           </h3>
           {planned.length === 0 ? (
             <div
@@ -252,6 +403,11 @@ const DailyPlanner: React.FC = () => {
                     {task.status === 'in_progress' && (
                       <span style={{ marginLeft: 6, fontSize: 12, color: '#f59e0b' }}>进行中</span>
                     )}
+                    {task.estimateMinutes ? (
+                      <span style={{ marginLeft: 6, fontSize: 12, color: '#9ca3af' }}>
+                        约 {task.estimateMinutes} 分钟
+                      </span>
+                    ) : null}
                   </span>
                   <button style={smallBtn} onClick={() => move(index, -1)} disabled={index === 0} title="上移">
                     ↑
@@ -333,6 +489,14 @@ const DailyPlanner: React.FC = () => {
           </button>
         </div>
       </div>
+      {showAiSettings && (
+        <AiSettingsDialog
+          onClose={(config) => {
+            setShowAiSettings(false);
+            if (config) setAiConfigured(config.configured);
+          }}
+        />
+      )}
     </div>
   );
 };
