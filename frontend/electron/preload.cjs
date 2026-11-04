@@ -41,6 +41,26 @@ contextBridge.exposeInMainWorld('petAPI', {
   },
 });
 
+// 自定义小猫动画：主窗口里的编辑页和小猫窗口都会用到。
+contextBridge.exposeInMainWorld('petThemesAPI', {
+  list: () => ipcRenderer.invoke('pet-themes:list'),
+  getSelected: () => ipcRenderer.invoke('pet-themes:selected'),
+  create: (input) => ipcRenderer.invoke('pet-themes:create', input),
+  update: (id, patch) => ipcRenderer.invoke('pet-themes:update', id, patch),
+  // data: Uint8Array（页面里读取的文件内容）
+  setStateFile: (id, state, data) => ipcRenderer.invoke('pet-themes:set-file', id, state, data),
+  clearStateFile: (id, state) => ipcRenderer.invoke('pet-themes:clear-file', id, state),
+  remove: (id) => ipcRenderer.invoke('pet-themes:remove', id),
+  select: (id) => ipcRenderer.send('pet-themes:select', id),
+  preview: (state) => ipcRenderer.send('pet-themes:preview', state),
+  openFolder: () => ipcRenderer.send('pet-themes:open-folder'),
+  onSelectedChanged: (cb) => {
+    const listener = (_event, id) => cb(String(id || ''));
+    ipcRenderer.on('pet-themes:selected-changed', listener);
+    return () => ipcRenderer.removeListener('pet-themes:selected-changed', listener);
+  },
+});
+
 // 替代 window.confirm / alert：Windows 上 Electron 原生弹窗关闭后，页面输入框经常拿不到焦点，
 // 表现为总结、新建任务等输入框"有时打不了字"。改由主进程弹框并在关闭后把焦点还给页面。
 // 用同步 IPC，调用方可以像 confirm() 一样直接拿到布尔值。

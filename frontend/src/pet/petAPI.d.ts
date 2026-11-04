@@ -9,7 +9,43 @@ export type PetStateMessage =
   | { type: 'focus'; active: boolean; title?: string }
   | { type: 'celebrate' }
   | { type: 'preview'; state: PetVisualState }
-  | { type: 'theme'; id: string };
+  | { type: 'theme'; id: string }
+  | { type: 'themes-changed' };
+
+/** 用户自定义主题（主进程 userData/pet-themes 里保存）。 */
+export interface CustomPetTheme {
+  id: string;
+  name: string;
+  kind: 'custom';
+  /** 没有上传的状态沿用这个内置主题。 */
+  base: string;
+  pixelated: boolean;
+  /** state -> 可直接加载的 URL（elf-theme://...）。 */
+  files: Partial<Record<PetVisualState, string>>;
+  updatedAt: number;
+}
+
+export type PetThemeResult<T> = { ok: true; result: T } | { ok: false; error: string };
+
+export interface PetThemesAPI {
+  list: () => Promise<CustomPetTheme[]>;
+  getSelected: () => Promise<string>;
+  create: (input: { name?: string; base?: string; pixelated?: boolean }) => Promise<PetThemeResult<CustomPetTheme>>;
+  update: (
+    id: string,
+    patch: { name?: string; base?: string; pixelated?: boolean },
+  ) => Promise<PetThemeResult<CustomPetTheme>>;
+  setStateFile: (id: string, state: PetVisualState, data: Uint8Array) => Promise<PetThemeResult<CustomPetTheme>>;
+  clearStateFile: (id: string, state: PetVisualState) => Promise<PetThemeResult<CustomPetTheme>>;
+  remove: (id: string) => Promise<PetThemeResult<boolean>>;
+  /** 让桌面小猫切换到这个主题（并记住）。 */
+  select: (id: string) => void;
+  /** 让桌面小猫立刻播放某个状态。 */
+  preview: (state: PetVisualState) => void;
+  openFolder: () => void;
+  /** (main window) 小猫当前主题变了（包括右键菜单切换）；返回取消订阅函数。 */
+  onSelectedChanged: (cb: (id: string) => void) => () => void;
+}
 
 export interface PetAPI {
   /** Toggle the main app window (show/hide). */
@@ -106,6 +142,7 @@ declare global {
     aiAPI?: AiAPI;
     appAPI?: AppAPI;
     petAPI?: PetAPI;
+    petThemesAPI?: PetThemesAPI;
     dataAPI?: DesktopDataAPI;
     dialogAPI?: DialogAPI;
   }

@@ -7,6 +7,7 @@ import BreakOverlay from './components/BreakOverlay';
 import SimpleTasksPage from './pages/SimpleTasksPage';
 import SimpleTomatoPage from './pages/SimpleTomatoPage';
 import StatisticsPage from './pages/StatisticsPage';
+import PetThemesPage from './pages/PetThemesPage';
 import { useTomatoStore } from './core/store/tomatoStore';
 
 function App() {
@@ -80,6 +81,7 @@ function AppRoutes() {
         <Route path="/tasks" element={<SimpleTasksPage />} />
         <Route path="/tomato" element={<SimpleTomatoPage />} />
         <Route path="/statistics" element={<StatisticsPage />} />
+        <Route path="/pet-themes" element={<PetThemesPage />} />
         <Route path="*" element={<Navigate to="/tasks" replace />} />
       </Routes>
     </PageErrorBoundary>
