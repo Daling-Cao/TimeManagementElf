@@ -33,9 +33,14 @@ describe('AppController (e2e)', () => {
       .get('/api/health')
       .expect(200)
       .expect((res) => {
-        expect(res.body.status).toBe('ok');
-        expect(res.body.version).toBe('1.0.0');
-        expect(typeof res.body.timestamp).toBe('string');
+        const body = res.body as {
+          status: string;
+          version: string;
+          timestamp: unknown;
+        };
+        expect(body.status).toBe('ok');
+        expect(body.version).toBe('1.0.0');
+        expect(typeof body.timestamp).toBe('string');
       });
   });
 });
