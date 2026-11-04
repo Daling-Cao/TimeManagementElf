@@ -105,6 +105,11 @@ contextBridge.exposeInMainWorld('aiAPI', {
   complete: (request) => ipcRenderer.invoke('ai:complete', request),
 });
 
+// 订阅日历：由主进程下载 ICS（页面直接请求会被跨域拦截）。
+contextBridge.exposeInMainWorld('calendarAPI', {
+  fetchIcs: (url) => ipcRenderer.invoke('calendar:fetch-ics', url),
+});
+
 contextBridge.exposeInMainWorld('dataAPI', {
   load: () => ipcRenderer.invoke('data:load'),
   saveTasks: (tasks) => ipcRenderer.invoke('data:save-tasks', tasks),

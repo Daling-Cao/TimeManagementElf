@@ -9,6 +9,8 @@ import type { TaskAiSummary } from '../core/ai';
 import { openDailyPlanner } from '../core/dailyPlan';
 import { openTaskSearch } from '../core/taskSearch';
 import DueDatePicker from '../components/DueDatePicker';
+import CalendarSelect from '../components/CalendarSelect';
+import { DEFAULT_CALENDAR_ID } from '../core/calendars';
 import { formatDueLabel, isOverdue, isUpcoming, todayKey } from '../core/schedule';
 
 interface TomatoSummary {
@@ -33,6 +35,8 @@ interface Task {
   completedAt?: string; // 任务完成时间
   aiSummary?: TaskAiSummary; // AI 生成的工作笔记总结
   dueDate?: string; // 计划日期 YYYY-MM-DD
+  calendarId?: string; // 放在哪个本地日历（没有 = 默认日历）
+  sourceEventId?: string; // 由外部日历事件转来的
 }
 
 const SimpleTasksPage: React.FC = () => {
@@ -97,6 +101,7 @@ const SimpleTasksPage: React.FC = () => {
   const [isCustomType, setIsCustomType] = useState(false);
   const [customTypeInput, setCustomTypeInput] = useState('');
   const [newTaskDue, setNewTaskDue] = useState('');
+  const [newTaskCalendar, setNewTaskCalendar] = useState(DEFAULT_CALENDAR_ID);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
@@ -109,6 +114,7 @@ const SimpleTasksPage: React.FC = () => {
   const [editIsCustomType, setEditIsCustomType] = useState(false);
   const [editCustomTypeInput, setEditCustomTypeInput] = useState('');
   const [editDue, setEditDue] = useState('');
+  const [editCalendar, setEditCalendar] = useState(DEFAULT_CALENDAR_ID);
   const [editError, setEditError] = useState('');
 
   // 一次性数据迁移：为旧的已完成任务补写 completedAt（优先用最后一条总结的时间）
@@ -180,6 +186,7 @@ const SimpleTasksPage: React.FC = () => {
     setIsCustomType(false);
     setCustomTypeInput('');
     setNewTaskDue('');
+    setNewTaskCalendar(DEFAULT_CALENDAR_ID);
   };
 
   const addTask = () => {
@@ -195,6 +202,7 @@ const SimpleTasksPage: React.FC = () => {
         totalDuration: 0,
         completedSessions: 0,
         ...(newTaskDue ? { dueDate: newTaskDue } : {}),
+        ...(newTaskCalendar !== DEFAULT_CALENDAR_ID ? { calendarId: newTaskCalendar } : {}),
       };
       setTasks([...tasks, task]);
       closeDialog();
@@ -306,6 +314,7 @@ const SimpleTasksPage: React.FC = () => {
     setEditIsCustomType(false);
     setEditCustomTypeInput('');
     setEditDue(task.dueDate || '');
+    setEditCalendar(task.calendarId || DEFAULT_CALENDAR_ID);
     setEditError('');
     setShowEditDialog(true);
   };
@@ -351,6 +360,7 @@ const SimpleTasksPage: React.FC = () => {
         priority: editPriority,
         type: finalType,
         dueDate: editDue || undefined,
+        calendarId: editCalendar !== DEFAULT_CALENDAR_ID ? editCalendar : undefined,
       };
     }));
     closeEditDialog();
@@ -833,6 +843,14 @@ const SimpleTasksPage: React.FC = () => {
               <DueDatePicker value={newTaskDue} onChange={setNewTaskDue} />
             </div>
 
+            {/* 放进哪个日历 */}
+            <div style={{ marginBottom: '24px', marginTop: '-8px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                日历
+              </label>
+              <CalendarSelect value={newTaskCalendar} onChange={setNewTaskCalendar} />
+            </div>
+
             {/* Buttons */}
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button
@@ -1202,6 +1220,14 @@ const SimpleTasksPage: React.FC = () => {
                 计划日期
               </label>
               <DueDatePicker value={editDue} onChange={setEditDue} />
+            </div>
+
+            {/* 放进哪个日历 */}
+            <div style={{ margin: '16px 0' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                日历
+              </label>
+              <CalendarSelect value={editCalendar} onChange={setEditCalendar} />
             </div>
 
             {editError && (

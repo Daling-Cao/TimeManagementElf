@@ -13,9 +13,52 @@ import {
   weekdayLabel,
 } from '../core/schedule';
 import DueDatePicker from '../components/DueDatePicker';
+import CalendarListPanel from '../components/CalendarListPanel';
+import CalendarSelect from '../components/CalendarSelect';
+import { DEFAULT_CALENDAR_ID, loadVisibleEvents, taskCalendarId, type CalEvent } from '../core/calendars';
+import { useCalendars } from '../core/useCalendars';
 
 const WEEK_HEADERS = ['一', '二', '三', '四', '五', '六', '日'];
-const MAX_CHIPS = 3;
+const MAX_CHIPS = 4;
+const MAX_EVENT_DAYS = 62;
+
+/** 事件覆盖的日期（本地日期）。全天事件的结束日不含当天；跨天的定时事件在结束于零点时不算最后一天。 */
+function eventDayKeys(e: CalEvent): string[] {
+  let first: string;
+  let last: string;
+  if (e.allDay) {
+    first = e.start;
+    last = e.end > e.start ? addDays(e.end, -1) : e.start;
+  } else {
+    const s = new Date(e.start);
+    const en = new Date(e.end);
+    first = toDateKey(s);
+    last = toDateKey(en);
+    if (last > first && en.getHours() === 0 && en.getMinutes() === 0) last = addDays(last, -1);
+    if (last < first) last = first;
+  }
+  const keys: string[] = [];
+  for (let k = first; k <= last && keys.length < MAX_EVENT_DAYS; k = addDays(k, 1)) keys.push(k);
+  return keys;
+}
+
+function hm(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** 事件在某一天显示的时间：全天 / 09:30–10:00 / 跨天时显示起止。 */
+function eventTimeLabel(e: CalEvent, day: string): string {
+  if (e.allDay) return '全天';
+  const startDay = toDateKey(new Date(e.start));
+  const endDay = toDateKey(new Date(e.end));
+  if (startDay === endDay) return `${hm(e.start)}–${hm(e.end)}`;
+  if (day === startDay) return `${hm(e.start)} 起`;
+  if (day === endDay) return `至 ${hm(e.end)}`;
+  return '全天';
+}
+
+type DayItem = { kind: 'event'; event: CalEvent } | { kind: 'task'; task: PlanTask };
 
 const PRIORITY_COLOR: Record<PlanTask['priority'], string> = {
   high: '#ef4444',
@@ -49,6 +92,11 @@ const CalendarPage: React.FC = () => {
   const navigate = useNavigate();
   const today = todayKey();
   const [tasks, setTasks] = useState<PlanTask[]>(() => readTasks());
+  const calendars = useCalendars();
+  // calendars 变化（同步 / 导入 / 显示隐藏）时重新读事件
+  const events = useMemo(() => loadVisibleEvents(calendars), [calendars]);
+  const calById = useMemo(() => new Map(calendars.map((c) => [c.id, c])), [calendars]);
+  const [addCalendarId, setAddCalendarId] = useState(DEFAULT_CALENDAR_ID);
   const [selected, setSelected] = useState(today);
   const [cursor, setCursor] = useState(() => {
     const d = fromDateKey(today);
@@ -74,10 +122,14 @@ const CalendarPage: React.FC = () => {
     };
   }, []);
 
+  const taskCal = (t: PlanTask) => calById.get(taskCalendarId(t, calendars));
+
+  // 每天的任务（只含显示中的本地日历）
   const byDay = useMemo(() => {
     const map = new Map<string, PlanTask[]>();
     for (const t of tasks) {
       if (!isDateKey(t.dueDate)) continue;
+      if (calById.get(taskCalendarId(t, calendars))?.visible === false) continue;
       const list = map.get(t.dueDate) ?? [];
       list.push(t);
       map.set(t.dueDate, list);
@@ -88,11 +140,40 @@ const CalendarPage: React.FC = () => {
       list.sort((a, b) => rank[a.status] - rank[b.status] || prio[a.priority] - prio[b.priority]);
     }
     return map;
-  }, [tasks]);
+  }, [tasks, calendars, calById]);
+
+  // 每天的外部日程
+  const eventsByDay = useMemo(() => {
+    const map = new Map<string, CalEvent[]>();
+    for (const e of events) {
+      for (const key of eventDayKeys(e)) {
+        const list = map.get(key) ?? [];
+        list.push(e);
+        map.set(key, list);
+      }
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => Number(b.allDay) - Number(a.allDay) || (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
+    }
+    return map;
+  }, [events]);
+
+  /** 日历格里的顺序：全天日程 → 任务 → 定时日程（按开始时间）。 */
+  const dayItems = (key: string): DayItem[] => {
+    const evs = eventsByDay.get(key) ?? [];
+    return [
+      ...evs.filter((e) => e.allDay).map((event) => ({ kind: 'event' as const, event })),
+      ...(byDay.get(key) ?? []).map((task) => ({ kind: 'task' as const, task })),
+      ...evs.filter((e) => !e.allDay).map((event) => ({ kind: 'event' as const, event })),
+    ];
+  };
+
+  const convertedEventIds = new Set(tasks.map((t) => t.sourceEventId).filter(Boolean));
 
   const unscheduled = tasks.filter((t) => t.status !== 'completed' && !isDateKey(t.dueDate));
   const grid = monthGrid(cursor.year, cursor.month);
   const selectedTasks = byDay.get(selected) ?? [];
+  const selectedEvents = eventsByDay.get(selected) ?? [];
 
   // 本月统计
   const monthPrefix = `${cursor.year}-${String(cursor.month + 1).padStart(2, '0')}`;
@@ -118,11 +199,24 @@ const CalendarPage: React.FC = () => {
   const addTask = () => {
     const title = newTitle.trim();
     if (!title) return;
-    const next = [...readTasks(), createTask(title, undefined, selected)];
+    const task = createTask(title, undefined, selected);
+    if (addCalendarId !== DEFAULT_CALENDAR_ID) task.calendarId = addCalendarId;
+    const next = [...readTasks(), task];
     writeTasks(next);
     setTasks(next);
     setNewTitle('');
     inputRef.current?.focus();
+  };
+
+  /** 把外部日程变成任务：计划日期是选中的这天，放进上面选的本地日历。 */
+  const convertEvent = (e: CalEvent) => {
+    const minutes = e.allDay ? undefined : Math.round((new Date(e.end).getTime() - new Date(e.start).getTime()) / 60000);
+    const task = createTask(e.title, minutes && minutes > 0 && minutes <= 8 * 60 ? minutes : undefined, selected);
+    task.sourceEventId = e.id;
+    if (addCalendarId !== DEFAULT_CALENDAR_ID) task.calendarId = addCalendarId;
+    const next = [...readTasks(), task];
+    writeTasks(next);
+    setTasks(next);
   };
 
   const shiftMonth = (delta: number) => {
@@ -161,7 +255,7 @@ const CalendarPage: React.FC = () => {
       marginTop: 3,
       padding: '1px 6px',
       borderRadius: 4,
-      borderLeft: `3px solid ${done ? '#9ca3af' : PRIORITY_COLOR[t.priority]}`,
+      borderLeft: `3px solid ${done ? '#9ca3af' : (taskCal(t)?.color ?? PRIORITY_COLOR[t.priority])}`,
       background: done ? '#f3f4f6' : overdue ? '#fee2e2' : t.status === 'in_progress' ? '#dbeafe' : '#eef2ff',
       color: done ? '#9ca3af' : '#1f2937',
       textDecoration: done ? 'line-through' : 'none',
@@ -172,6 +266,25 @@ const CalendarPage: React.FC = () => {
       textOverflow: 'ellipsis',
       textAlign: 'left',
       cursor: 'grab',
+    };
+  };
+
+  const eventChipStyle = (e: CalEvent): React.CSSProperties => {
+    const color = calById.get(e.calendarId)?.color ?? '#64748b';
+    return {
+      display: 'block',
+      width: '100%',
+      boxSizing: 'border-box',
+      marginTop: 3,
+      padding: '1px 6px',
+      borderRadius: 4,
+      background: e.allDay ? color : `${color}1f`,
+      color: e.allDay ? 'white' : '#1f2937',
+      fontSize: 12,
+      lineHeight: '18px',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
     };
   };
 
@@ -260,7 +373,7 @@ const CalendarPage: React.FC = () => {
               const inMonth = d.getMonth() === cursor.month;
               const isToday = key === today;
               const isSelected = key === selected;
-              const list = byDay.get(key) ?? [];
+              const list = dayItems(key);
               const isDrop = dropKey === key;
               return (
                 <div
@@ -305,7 +418,24 @@ const CalendarPage: React.FC = () => {
                       {d.getDate()}
                     </span>
                   </div>
-                  {list.slice(0, MAX_CHIPS).map((t) => (
+                  {list.slice(0, MAX_CHIPS).map((item) => {
+                    if (item.kind === 'event') {
+                      const e = item.event;
+                      return (
+                        <span
+                          key={`e-${e.id}`}
+                          title={`${e.title}\n${eventTimeLabel(e, key)}${e.location ? ` · ${e.location}` : ''}\n${calById.get(e.calendarId)?.name ?? ''}`}
+                          style={eventChipStyle(e)}
+                        >
+                          {!e.allDay && toDateKey(new Date(e.start)) === key && (
+                            <span style={{ color: '#6b7280', marginRight: 3 }}>{hm(e.start)}</span>
+                          )}
+                          {e.title}
+                        </span>
+                      );
+                    }
+                    const t = item.task;
+                    return (
                     <span
                       key={t.id}
                       draggable
@@ -324,7 +454,8 @@ const CalendarPage: React.FC = () => {
                     >
                       {t.title}
                     </span>
-                  ))}
+                    );
+                  })}
                   {list.length > MAX_CHIPS && (
                     <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
                       还有 {list.length - MAX_CHIPS} 个…
@@ -335,15 +466,14 @@ const CalendarPage: React.FC = () => {
             })}
           </div>
           <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 10 }}>
-            提示：点某天查看和添加任务；把任务拖到其他日期即可改期。
+            提示：点某天查看和添加任务；把任务拖到其他日期即可改期。导入 / 订阅的日程是只读的，可以在右侧“转为任务”。
           </div>
         </section>
 
+        <aside style={{ flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* 选中日期 */}
-        <aside
+        <div
           style={{
-            flex: '1 1 300px',
-            minWidth: 0,
             backgroundColor: 'white',
             borderRadius: 8,
             boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
@@ -358,6 +488,7 @@ const CalendarPage: React.FC = () => {
             {selected < today ? '（已过去）' : ''}
           </div>
 
+          <CalendarSelect value={addCalendarId} onChange={setAddCalendarId} style={{ marginBottom: 8 }} />
           <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
             <input
               ref={inputRef}
@@ -392,6 +523,63 @@ const CalendarPage: React.FC = () => {
             </button>
           </div>
 
+          {selectedEvents.length > 0 && (
+            <>
+              <h3 style={{ fontSize: 14, color: '#374151', margin: '0 0 8px' }}>日程（{selectedEvents.length}）</h3>
+              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 16px' }}>
+                {selectedEvents.map((e) => {
+                  const cal = calById.get(e.calendarId);
+                  const color = cal?.color ?? '#64748b';
+                  const converted = convertedEventIds.has(e.id);
+                  return (
+                    <li
+                      key={e.id}
+                      style={{
+                        borderLeft: `3px solid ${color}`,
+                        background: `${color}12`,
+                        borderRadius: 6,
+                        padding: '6px 10px',
+                        marginBottom: 6,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                        <span style={{ fontSize: 12, color: '#6b7280', flex: 'none' }}>{eventTimeLabel(e, selected)}</span>
+                        <span style={{ flex: 1, minWidth: 0, fontSize: 14, color: '#111827', wordBreak: 'break-all' }}>{e.title}</span>
+                        <button
+                          onClick={() => convertEvent(e)}
+                          disabled={converted}
+                          title={converted ? '已经转成任务了' : '在这天创建一个同名任务'}
+                          style={{
+                            ...btn,
+                            padding: '1px 8px',
+                            fontSize: 12,
+                            flex: 'none',
+                            color: converted ? '#9ca3af' : '#374151',
+                            cursor: converted ? 'default' : 'pointer',
+                          }}
+                        >
+                          {converted ? '已转任务' : '转为任务'}
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+                        {cal?.name}
+                        {e.location ? ` · 📍 ${e.location}` : ''}
+                      </div>
+                      {e.description && (
+                        <div
+                          style={{ fontSize: 12, color: '#6b7280', marginTop: 2, whiteSpace: 'pre-wrap', maxHeight: 54, overflow: 'hidden' }}
+                          title={e.description}
+                        >
+                          {e.description}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              <h3 style={{ fontSize: 14, color: '#374151', margin: '0 0 8px' }}>任务（{selectedTasks.length}）</h3>
+            </>
+          )}
           {selectedTasks.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '20px 0', color: '#9ca3af', fontSize: 14 }}>
               这天还没有计划的任务
@@ -405,7 +593,7 @@ const CalendarPage: React.FC = () => {
                     key={t.id}
                     style={{
                       border: '1px solid #e5e7eb',
-                      borderLeft: `3px solid ${done ? '#9ca3af' : PRIORITY_COLOR[t.priority]}`,
+                      borderLeft: `3px solid ${done ? '#9ca3af' : (taskCal(t)?.color ?? PRIORITY_COLOR[t.priority])}`,
                       borderRadius: 6,
                       padding: '8px 10px',
                       marginBottom: 8,
@@ -433,7 +621,13 @@ const CalendarPage: React.FC = () => {
                         {t.status === 'in_progress' && (
                           <span style={{ marginLeft: 6, fontSize: 12, color: '#3b82f6' }}>进行中</span>
                         )}
-                        <span style={{ marginLeft: 6, fontSize: 12, color: '#9ca3af' }}>{t.type}</span>
+                        <span style={{ marginLeft: 6, fontSize: 12, color: '#9ca3af' }}>
+                          {t.type} · {taskCal(t)?.name}
+                        </span>
+                        <span
+                          title={`${t.priority === 'high' ? '高' : t.priority === 'medium' ? '中' : '低'}优先级`}
+                          style={{ marginLeft: 6, display: 'inline-block', width: 6, height: 6, borderRadius: 999, background: PRIORITY_COLOR[t.priority], verticalAlign: 'middle' }}
+                        />
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: 6, marginTop: 6, paddingLeft: 24, flexWrap: 'wrap' }}>
@@ -497,6 +691,18 @@ const CalendarPage: React.FC = () => {
               </div>
             </>
           )}
+        </div>
+
+        <div
+          style={{
+            backgroundColor: 'white',
+            borderRadius: 8,
+            boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+            padding: 20,
+          }}
+        >
+          <CalendarListPanel />
+        </div>
         </aside>
       </main>
     </div>

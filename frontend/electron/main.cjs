@@ -672,6 +672,41 @@ ipcMain.handle('ai:complete', (_event, request) =>
     jsonSchema: request && request.jsonSchema ? request.jsonSchema : undefined,
   }),
 );
+// 订阅日历（Outlook / Google / iCloud 的 ICS 链接）。只允许 http(s)/webcal，限制大小和超时。
+const MAX_ICS_BYTES = 20 * 1024 * 1024;
+ipcMain.handle('calendar:fetch-ics', async (_event, rawUrl) => {
+  try {
+    const url = new URL(String(rawUrl || '').trim().replace(/^webcals?:\/\//i, 'https://'));
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      return { ok: false, error: '只支持 https:// 或 webcal:// 开头的日历地址。' };
+    }
+    const response = await net.fetch(url.toString(), {
+      headers: { Accept: 'text/calendar, text/plain;q=0.9, */*;q=0.5' },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) {
+      const hint =
+        response.status === 401 || response.status === 403 || response.status === 404
+          ? '（链接可能已失效或不是公开/私密 iCal 地址）'
+          : '';
+      return { ok: false, error: `下载失败：HTTP ${response.status}${hint}` };
+    }
+    const declared = Number(response.headers.get('content-length') || 0);
+    if (declared > MAX_ICS_BYTES) return { ok: false, error: '日历文件太大（超过 20 MB）。' };
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > MAX_ICS_BYTES) return { ok: false, error: '日历文件太大（超过 20 MB）。' };
+    const text = buffer.toString('utf8');
+    if (!/BEGIN:VCALENDAR/i.test(text)) {
+      return { ok: false, error: '这个链接返回的不是日历（.ics）数据，请确认复制的是 iCal 格式的地址。' };
+    }
+    log.info('calendar', 'Fetched subscription', { host: url.host, bytes: buffer.length });
+    return { ok: true, text };
+  } catch (error) {
+    const message = error && error.name === 'TimeoutError' ? '连接超时' : (error && error.message) || String(error);
+    log.warn('calendar', 'Subscription fetch failed', { error: message });
+    return { ok: false, error: `下载失败：${message}` };
+  }
+});
 ipcMain.on('app:quit', () => {
   log.info('app', 'Quit requested through IPC');
   app.isQuitting = true;

@@ -25,6 +25,10 @@ export interface PlanTask {
   aiSummary?: TaskAiSummary;
   /** 计划在哪天做（'YYYY-MM-DD'，本地日期），见 core/schedule.ts。 */
   dueDate?: string;
+  /** 放在哪个本地日历里（见 core/calendars.ts），没有就是默认日历。 */
+  calendarId?: string;
+  /** 由外部日历事件“转为任务”时记下事件 id，避免重复转换。 */
+  sourceEventId?: string;
 }
 
 export interface DailyPlan {

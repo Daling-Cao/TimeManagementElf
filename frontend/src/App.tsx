@@ -11,6 +11,7 @@ import PetThemesPage from './pages/PetThemesPage';
 import CalendarPage from './pages/CalendarPage';
 import { useTomatoStore } from './core/store/tomatoStore';
 import { useBreakStore } from './core/store/breakStore';
+import { syncDueSubscriptions } from './core/calendarSync';
 
 function App() {
   // 不要订阅 timeRemaining：每秒倒计时会重绘整棵路由树，
@@ -46,6 +47,14 @@ function App() {
         window.petAPI?.celebrate();
       }
     });
+  }, []);
+
+  // 订阅的外部日历（Outlook / Google / iCloud 链接）：启动时和之后每 5 分钟检查一次，超过 30 分钟没同步的就刷新
+  useEffect(() => {
+    const run = () => void syncDueSubscriptions();
+    run();
+    const timer = window.setInterval(run, 5 * 60 * 1000);
+    return () => window.clearInterval(timer);
   }, []);
 
   // 添加网页关闭确认提示
