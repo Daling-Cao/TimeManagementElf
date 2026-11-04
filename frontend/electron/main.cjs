@@ -91,10 +91,49 @@ function setAutoLaunch(enabled) {
   log.info('auto-launch', 'Login item updated', { enabled, ...target });
 }
 
-// 默认开启；用户在菜单里关掉后记住选择。每次启动都重新写一次，exe 换了位置也能跟上。
+// 默认开启；用户在菜单里关掉后记住选择。
+// 每次启动先检查当前 exe（路径 + 参数）是否已注册为开机启动，没有才注册；
+// exe 换了位置时旧记录对不上，也会被当成“未注册”重新写入。
 function initAutoLaunch() {
-  if (readSettings().autoLaunch === false) return;
-  setAutoLaunch(true);
+  if (readSettings().autoLaunch === false) {
+    log.info('auto-launch', 'Disabled by user, not registering');
+    return;
+  }
+  if (!isAutoLaunchSupported()) {
+    log.info('auto-launch', 'Skipped (only available in the packaged app)');
+    return;
+  }
+
+  const target = autoLaunchTarget();
+  let current;
+  try {
+    current = app.getLoginItemSettings(target);
+  } catch (error) {
+    log.error('auto-launch', 'Could not read login item settings', { error });
+  }
+
+  if (current?.openAtLogin) {
+    log.info('auto-launch', 'Already registered', {
+      ...target,
+      executableWillLaunchAtLogin: current.executableWillLaunchAtLogin,
+    });
+    // Windows 任务管理器「启动」页里被用户禁用时，注册表项仍在但不会启动；尊重用户选择，只记日志。
+    if (process.platform === 'win32' && current.executableWillLaunchAtLogin === false) {
+      log.warn('auto-launch', 'Registered but disabled in Task Manager startup apps');
+    }
+    return;
+  }
+
+  log.info('auto-launch', 'Not registered yet, registering now', target);
+  try {
+    setAutoLaunch(true);
+    const after = app.getLoginItemSettings(target);
+    if (!after.openAtLogin) {
+      log.warn('auto-launch', 'Registration did not take effect', { ...target, after });
+    }
+  } catch (error) {
+    log.error('auto-launch', 'Could not register login item', { ...target, error });
+  }
 }
 
 // ---------- 每日规划 ----------
