@@ -6,7 +6,9 @@ const {
   Menu,
   shell,
   dialog,
+  powerMonitor,
 } = require('electron');
+const fs = require('node:fs');
 const path = require('node:path');
 const log = require('./logger.cjs');
 const dataStore = require('./data-store.cjs');
@@ -27,6 +29,93 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock();
 // Theme list reported by the pet renderer (for the context menu).
 let petThemes = [];
 let petSelectedTheme = '';
+
+// ---------- 应用设置（userData/app-settings.json） ----------
+let settingsFile = '';
+
+function readSettings() {
+  try {
+    return JSON.parse(fs.readFileSync(settingsFile, 'utf8')) || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSettings(patch) {
+  try {
+    const next = { ...readSettings(), ...patch };
+    fs.writeFileSync(settingsFile, JSON.stringify(next, null, 2), 'utf8');
+  } catch (error) {
+    log.error('settings', 'Could not write app settings', { settingsFile, error });
+  }
+}
+
+// ---------- 开机自动启动 ----------
+// 只有打包后的 exe 才注册：开发模式下注册的会是 node_modules 里的 electron.exe，
+// 开机时只会打开一个空的 Electron 欢迎页。
+// portable 版运行时会被解压到临时目录，process.execPath 指向临时文件，
+// 必须注册 electron-builder 提供的原始 exe 路径。
+function autoLaunchTarget() {
+  return {
+    path: process.env.PORTABLE_EXECUTABLE_FILE || process.execPath,
+    args: ['--autostart'],
+  };
+}
+
+function isAutoLaunchSupported() {
+  return app.isPackaged && process.platform !== 'linux';
+}
+
+function isAutoLaunchEnabled() {
+  if (!isAutoLaunchSupported()) return false;
+  return app.getLoginItemSettings(autoLaunchTarget()).openAtLogin;
+}
+
+function setAutoLaunch(enabled) {
+  writeSettings({ autoLaunch: enabled });
+  if (!isAutoLaunchSupported()) {
+    log.info('auto-launch', 'Skipped (only available in the packaged app)', { enabled });
+    return;
+  }
+  const target = autoLaunchTarget();
+  app.setLoginItemSettings({ openAtLogin: enabled, ...target });
+  log.info('auto-launch', 'Login item updated', { enabled, ...target });
+}
+
+// 默认开启；用户在菜单里关掉后记住选择。每次启动都重新写一次，exe 换了位置也能跟上。
+function initAutoLaunch() {
+  if (readSettings().autoLaunch === false) return;
+  setAutoLaunch(true);
+}
+
+// ---------- 每日规划 ----------
+// 主进程只负责在“可能是新的一天”的时机通知页面检查（开机由页面自己检查）。
+// 页面判断今天是否已经规划过，需要时自己弹出规划窗口并请求显示主窗口。
+function requestPlanCheck(reason) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  log.info('daily-plan', 'Plan check requested', { reason });
+  mainWindow.webContents.send('plan:check', { reason });
+}
+
+function openPlanner() {
+  showMainWindow();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('plan:open');
+  }
+}
+
+function initDailyPlanTriggers() {
+  // 唤醒/解锁后稍等一会儿，等网络、显示器和窗口都恢复。
+  powerMonitor.on('resume', () => setTimeout(() => requestPlanCheck('resume'), 3000));
+  powerMonitor.on('unlock-screen', () =>
+    setTimeout(() => requestPlanCheck('unlock-screen'), 1500),
+  );
+  // 一直不关机/不睡眠的电脑：每分钟检查一次，但只在用户正在使用电脑时提醒，
+  // 免得半夜跨天时弹窗没人看。
+  setInterval(() => {
+    if (powerMonitor.getSystemIdleTime() < 120) requestPlanCheck('tick');
+  }, 60_000);
+}
 
 function loadRoute(win, htmlFile) {
   log.info('navigation', 'Loading renderer entry', { htmlFile, isDev });
@@ -137,6 +226,12 @@ function createMainWindow() {
 
   loadRoute(mainWindow, 'index.html');
 
+  // Windows 注销/关机：放行关闭，否则下面的“关闭即隐藏”会挡住关机。
+  mainWindow.on('session-end', () => {
+    log.info('app', 'Windows session ending; allowing quit');
+    app.isQuitting = true;
+  });
+
   // Closing the main window just hides it — the pet keeps living on the desktop.
   mainWindow.on('close', (event) => {
     if (!app.isQuitting) {
@@ -199,6 +294,15 @@ function createPetWindow() {
   }
 }
 
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  // Windows 不允许后台程序抢焦点时，至少让任务栏图标闪烁提醒。
+  if (!mainWindow.isFocused()) mainWindow.flashFrame(true);
+}
+
 function toggleMainWindow() {
   if (!mainWindow) return;
   if (mainWindow.isVisible()) {
@@ -222,6 +326,7 @@ function showPetMenu() {
   log.info('pet-menu', 'Opening context menu');
   const template = [
     { label: '打开 / 隐藏主界面', click: toggleMainWindow },
+    { label: '📅 规划今天', click: openPlanner },
     { type: 'separator' },
     {
       label: '主题',
@@ -305,6 +410,13 @@ function showPetMenu() {
         }
       },
     },
+    {
+      label: isAutoLaunchSupported() ? '开机自动启动' : '开机自动启动（仅打包版）',
+      type: 'checkbox',
+      enabled: isAutoLaunchSupported(),
+      checked: isAutoLaunchEnabled(),
+      click: (item) => setAutoLaunch(item.checked),
+    },
     { type: 'separator' },
     {
       label: '退出',
@@ -323,6 +435,7 @@ ipcMain.on('pet:move', (_event, x, y) => {
   if (petWindow) petWindow.setPosition(Math.round(x), Math.round(y));
 });
 ipcMain.on('main:toggle', toggleMainWindow);
+ipcMain.on('main:show', showMainWindow);
 
 // 主进程弹框代替渲染进程的 window.confirm/alert（后者关闭后输入框常常无法再获得焦点）。
 function showDialogFor(event, options) {
@@ -405,9 +518,14 @@ if (!hasSingleInstanceLock) {
   app.whenReady().then(() => {
     log.init(app);
     dataStore.init(app);
-    log.info('app', 'Electron app ready with single-instance lock');
+    settingsFile = path.join(app.getPath('userData'), 'app-settings.json');
+    log.info('app', 'Electron app ready with single-instance lock', {
+      autostart: process.argv.includes('--autostart'),
+    });
+    initAutoLaunch();
     createMainWindow();
     createPetWindow();
+    initDailyPlanTriggers();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -424,7 +542,11 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason) => {
   log.error('process', 'Unhandled promise rejection', reason);
 });
-app.on('before-quit', () => log.info('app', 'before-quit'));
+app.on('before-quit', () => {
+  // 任何途径的退出（菜单、托盘、macOS Cmd+Q、系统关机）都不再被“关闭即隐藏”拦住。
+  app.isQuitting = true;
+  log.info('app', 'before-quit');
+});
 app.on('will-quit', () => log.info('app', 'will-quit'));
 
 // The pet is a persistent desktop resident, so don't auto-quit when the main

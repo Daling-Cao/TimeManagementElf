@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import PageErrorBoundary from './components/PageErrorBoundary';
+import DailyPlanner from './components/DailyPlanner';
+import BreakOverlay from './components/BreakOverlay';
 import SimpleHomePage from './pages/SimpleHomePage';
 import SimpleTasksPage from './pages/SimpleTasksPage';
 import SimpleTomatoPage from './pages/SimpleTomatoPage';
@@ -54,6 +56,9 @@ function App() {
     <Router>
       <div className="App">
         <AppRoutes />
+        {/* 全局弹层放在路由外，切页时不会被卸载 */}
+        <BreakOverlay />
+        <DailyPlanner />
       </div>
     </Router>
   );

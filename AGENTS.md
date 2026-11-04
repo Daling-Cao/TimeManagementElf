@@ -29,6 +29,12 @@ The frontend can run as a desktop app whose entry point is a **desktop pet**: a 
 - The main window drives `focus`/`celebrate` from the pomodoro store: `src/App.tsx` calls `window.petAPI.setFocus(isRunning, currentTask?.title)` and `window.petAPI.celebrate()` (on `timeRemaining` hitting 0). While focusing, the pet shows a dark pill above the cat-head with the working task title. The main window uses `backgroundThrottling: false` so the timer stays accurate while hidden.
 - Set env `PET_FAST=1` to shorten the playful cooldown (~12 s) for demos; the right-click `预览动作` submenu forces any state on demand.
 
+**Auto-launch, daily planning & breaks**
+
+- Auto-launch: `electron/main.cjs` registers a login item (`app.setLoginItemSettings`, arg `--autostart`) on every start, **packaged builds only** (dev would register the bare `electron.exe`). For the portable exe it uses `PORTABLE_EXECUTABLE_FILE`. Pet menu checkbox `开机自动启动` toggles it; the choice is stored in `userData/app-settings.json`. Closing the main window hides it; `before-quit` / Windows `session-end` set `app.isQuitting` so shutdown is not blocked.
+- Daily planner (`src/components/DailyPlanner.tsx`, logic in `src/core/dailyPlan.ts`): pops up once per day (day starts at 04:00, `planDayKey`) on app start, and on `plan:check` sent by the main process on `powerMonitor` `resume` / `unlock-screen` and a 60 s tick (only when the user is active). It does not interrupt a running pomodoro. Today's order is `localStorage['dailyPlan']`; tasks stay in `localStorage['tasks']`. Opened manually via pet menu `📅 规划今天` or the home-page button.
+- Breaks (`src/components/BreakOverlay.tsx`, `src/core/store/breakStore.ts`): choosing `任务已完成` in the pomodoro summary starts a 10-minute break (`BREAK_MINUTES`, timestamp-based). When it ends the main window is shown with the next unfinished task from today's plan.
+
 **Swappable themes (GIF / image or built-in vector)**
 
 - The pet animation is theme-driven so it can be replaced later. Registry: `frontend/src/pet/themes.json`; renderer switch: `src/pet/PetView.tsx` (`theme.kind === 'builtin'` → canvas `PixelCat`; `'image'` → one `<img>` per state that can be a GIF/APNG/animated WebP/PNG). Helpers/persistence in `src/pet/theme.ts` (selection saved in `localStorage['pet-theme']`).

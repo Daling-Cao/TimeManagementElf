@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTomatoStore } from '../core/store/tomatoStore';
 import { readStoredList } from '../core/services/storedList';
 import { alertDialog, confirmDialog } from '../core/services/dialogs';
+import { BREAK_MINUTES, useBreakStore } from '../core/store/breakStore';
 
 interface Task {
   id: string;
@@ -182,6 +183,8 @@ const SimpleTomatoPage: React.FC = () => {
       } catch (err) {
         console.error('更新任务状态失败:', err);
       }
+      // 每完成一个任务自动进入休息（见 BreakOverlay）
+      useBreakStore.getState().start(BREAK_MINUTES, taskToSave.title);
     }
 
     setShowSummaryDialog(false);

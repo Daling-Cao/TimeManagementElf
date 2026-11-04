@@ -53,8 +53,18 @@ export interface DialogAPI {
   alert: (message: string) => void;
 }
 
+export interface AppAPI {
+  /** Show and focus the main window (e.g. for the daily planner or break end). */
+  showMain: () => void;
+  /** Main process hints that a new day may have started (resume / unlock / tick). */
+  onPlanCheck: (cb: (payload: { reason?: string }) => void) => () => void;
+  /** Main process asks to open the daily planner (pet menu "规划今天"). */
+  onPlanOpen: (cb: () => void) => () => void;
+}
+
 declare global {
   interface Window {
+    appAPI?: AppAPI;
     petAPI?: PetAPI;
     dataAPI?: DesktopDataAPI;
     dialogAPI?: DialogAPI;
