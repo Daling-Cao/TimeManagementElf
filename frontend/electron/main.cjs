@@ -115,6 +115,14 @@ function openPlanner() {
   }
 }
 
+// 任务搜索：同规划一样由页面判断窗口原本是否隐藏，再自己显示窗口。
+function openSearch() {
+  log.info('main-window', 'Task search requested');
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('search:open');
+  }
+}
+
 function initDailyPlanTriggers() {
   // 唤醒/解锁后稍等一会儿，等网络、显示器和窗口都恢复。
   powerMonitor.on('resume', () => setTimeout(() => requestPlanCheck('resume'), 3000));
@@ -339,6 +347,7 @@ function showPetMenu() {
   log.info('pet-menu', 'Opening context menu');
   const template = [
     { label: '📅 规划今天', click: openPlanner },
+    { label: '🔍 搜索任务', click: openSearch },
     { label: '📋 任务列表', click: () => openPage('/tasks') },
     { label: '🍅 番茄钟', click: () => openPage('/tomato') },
     { label: '📊 统计', click: () => openPage('/statistics') },

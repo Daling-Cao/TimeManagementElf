@@ -136,7 +136,7 @@ function describeTasks(tasks: PlanTask[]): string {
 }
 
 /** 从模型回复里取出 JSON：兼容 \`\`\`json 代码块或前后多出的文字。 */
-function extractJson(text: string): unknown {
+export function extractJson(text: string): unknown {
   const trimmed = text.trim();
   try {
     return JSON.parse(trimmed);

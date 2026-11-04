@@ -64,6 +64,8 @@ export interface AppAPI {
   onNavigate: (cb: (route: string) => void) => () => void;
   /** Main process hints that a new day may have started (resume / unlock / tick). */
   onPlanCheck: (cb: (payload: { reason?: string }) => void) => () => void;
+  /** Main process asks to open the task search (pet menu "搜索任务"). */
+  onSearchOpen: (cb: () => void) => () => void;
   /** Main process asks to open the daily planner (pet menu "规划今天"). */
   onPlanOpen: (cb: () => void) => () => void;
 }

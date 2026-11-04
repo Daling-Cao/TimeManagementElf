@@ -64,6 +64,11 @@ contextBridge.exposeInMainWorld('appAPI', {
     ipcRenderer.on('plan:check', listener);
     return () => ipcRenderer.removeListener('plan:check', listener);
   },
+  onSearchOpen: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on('search:open', listener);
+    return () => ipcRenderer.removeListener('search:open', listener);
+  },
   onPlanOpen: (cb) => {
     const listener = () => cb();
     ipcRenderer.on('plan:open', listener);

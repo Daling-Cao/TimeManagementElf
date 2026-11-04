@@ -3,6 +3,7 @@ import { useTomatoStore } from '../core/store/tomatoStore';
 import FloatingTomatoTimer from '../components/FloatingTomatoTimer';
 import { readStoredList } from '../core/services/storedList';
 import { openDailyPlanner } from '../core/dailyPlan';
+import { openTaskSearch } from '../core/taskSearch';
 
 interface TaskStats {
   total: number;
@@ -393,7 +394,10 @@ const StatisticsPage: React.FC = () => {
               <a href="#/statistics" style={{ color: '#0284c7', fontWeight: '500', textDecoration: 'none' }}>统计</a>
               {/* 桌面版从小猫右键菜单打开规划；网页版没有小猫，保留这个入口 */}
               {!window.petAPI && (
-                <a href="#" onClick={(e) => { e.preventDefault(); openDailyPlanner(); }} style={{ color: '#6b7280', textDecoration: 'none' }}>📅 规划今天</a>
+                <>
+                  <a href="#" onClick={(e) => { e.preventDefault(); openDailyPlanner(); }} style={{ color: '#6b7280', textDecoration: 'none' }}>📅 规划今天</a>
+                  <a href="#" onClick={(e) => { e.preventDefault(); openTaskSearch(); }} style={{ color: '#6b7280', textDecoration: 'none' }}>🔍 搜索</a>
+                </>
               )}
             </nav>
           </div>
