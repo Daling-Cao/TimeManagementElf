@@ -94,10 +94,21 @@ export function writeTasks(tasks: PlanTask[]): void {
   window.dispatchEvent(new Event('focus'));
 }
 
+// 同一毫秒里连续创建多个任务（例如 AI 一次返回一批）时，Date.now() + 小随机数会撞号。
+// 优先用 crypto.randomUUID；不可用时退回时间戳 + 自增计数 + 随机数。
+let idCounter = 0;
+export function newTaskId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  idCounter = (idCounter + 1) % 1_000_000;
+  return `${Date.now().toString(36)}-${idCounter.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function createTask(title: string, estimateMinutes?: number): PlanTask {
   return {
     ...(estimateMinutes ? { estimateMinutes } : {}),
-    id: `${Date.now()}${Math.floor(Math.random() * 1000)}`,
+    id: newTaskId(),
     title,
     status: 'pending',
     priority: 'medium',
