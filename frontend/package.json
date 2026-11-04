@@ -74,12 +74,30 @@
       "icon": "build/icon.ico",
       "target": [
         {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
           "target": "portable",
           "arch": [
             "x64"
           ]
         }
       ],
+      "artifactName": "TimeManagementElf.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "时间管理小精灵",
+      "artifactName": "TimeManagementElf-Setup-${version}.${ext}"
+    },
+    "portable": {
       "artifactName": "TimeManagementElf.${ext}"
     }
   }
