@@ -43,6 +43,8 @@ export interface PetThemesAPI {
   /** 让桌面小猫立刻播放某个状态。 */
   preview: (state: PetVisualState) => void;
   openFolder: () => void;
+  /** (main window) 小猫当前主题变了（包括右键菜单切换）；返回取消订阅函数。 */
+  onSelectedChanged: (cb: (id: string) => void) => () => void;
 }
 
 export interface PetAPI {

@@ -334,6 +334,16 @@ function toggleMainWindow() {
   }
 }
 
+// 小猫当前主题变了（右键菜单 / 编辑页 / 小猫自己回退到默认）：告诉主窗口里的编辑页。
+function setSelectedTheme(id) {
+  const next = String(id || '');
+  if (next === petSelectedTheme) return;
+  petSelectedTheme = next;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('pet-themes:selected-changed', next);
+  }
+}
+
 function sendPetState(state) {
   log.info('pet-state', 'Sending state to pet renderer', state);
   if (petWindow && !petWindow.isDestroyed()) {
@@ -358,7 +368,7 @@ function showPetMenu() {
               type: 'radio',
               checked: t.id === petSelectedTheme,
               click: () => {
-                petSelectedTheme = t.id;
+                setSelectedTheme(t.id);
                 sendPetState({ type: 'theme', id: t.id });
               },
             }))
@@ -497,7 +507,7 @@ ipcMain.on('dialog:alert', (event, message) => {
 ipcMain.on('pet:contextmenu', showPetMenu);
 ipcMain.on('pet:themes', (_event, payload) => {
   petThemes = (payload && payload.themes) || [];
-  petSelectedTheme = (payload && payload.selectedId) || '';
+  setSelectedTheme((payload && payload.selectedId) || '');
   log.info('themes', 'Pet themes reported', {
     selectedId: petSelectedTheme,
     themes: petThemes,
@@ -537,7 +547,7 @@ ipcMain.handle('pet-themes:remove', (_event, id) =>
   themeCall('remove', () => petThemesStore.remove(id)),
 );
 ipcMain.on('pet-themes:select', (_event, id) => {
-  petSelectedTheme = String(id || '');
+  setSelectedTheme(id);
   sendPetState({ type: 'theme', id: petSelectedTheme });
 });
 ipcMain.on('pet-themes:preview', (_event, state) => {

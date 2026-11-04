@@ -173,6 +173,12 @@ const PetThemesPage: React.FC = () => {
     refresh();
   }, [refresh]);
 
+  // 右键菜单切换主题时编辑页也要跟着更新「使用中」
+  useEffect(
+    () => api?.onSelectedChanged((id) => setActiveId(id || DEFAULT_THEME_ID)),
+    [api],
+  );
+
   useEffect(() => {
     setNameDraft(editing?.name ?? '');
   }, [editing?.id, editing?.name]);
@@ -257,7 +263,8 @@ const PetThemesPage: React.FC = () => {
     const id = editing.id;
     const done = await run(() => api.remove(id), '主题已删除');
     if (done) {
-      if (activeId === id) activate(DEFAULT_THEME_ID);
+      // 以主进程记录的当前主题为准，避免页面里的状态过期时误把用户的选择重置
+      if ((await api.getSelected()) === id) activate(DEFAULT_THEME_ID);
       await refresh();
     }
   };

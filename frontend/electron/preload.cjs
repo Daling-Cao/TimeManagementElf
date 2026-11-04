@@ -54,6 +54,11 @@ contextBridge.exposeInMainWorld('petThemesAPI', {
   select: (id) => ipcRenderer.send('pet-themes:select', id),
   preview: (state) => ipcRenderer.send('pet-themes:preview', state),
   openFolder: () => ipcRenderer.send('pet-themes:open-folder'),
+  onSelectedChanged: (cb) => {
+    const listener = (_event, id) => cb(String(id || ''));
+    ipcRenderer.on('pet-themes:selected-changed', listener);
+    return () => ipcRenderer.removeListener('pet-themes:selected-changed', listener);
+  },
 });
 
 // 替代 window.confirm / alert：Windows 上 Electron 原生弹窗关闭后，页面输入框经常拿不到焦点，
